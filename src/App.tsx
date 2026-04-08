@@ -120,8 +120,8 @@ interface Strategy {
 
 
 
-
-const API_BASE_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
+const API_BASE_URL = "/api";
+// const API_BASE_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
 const SOCKET_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 const socket = io(SOCKET_URL, { autoConnect: false });
 
