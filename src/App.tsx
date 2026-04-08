@@ -121,8 +121,8 @@ interface Strategy {
 
 
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
+const API_BASE_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
+const SOCKET_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 const socket = io(SOCKET_URL, { autoConnect: false });
 
 function PaperTradeHistoryView() {
