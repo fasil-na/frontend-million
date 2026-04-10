@@ -120,9 +120,10 @@ interface Strategy {
 
 
 
-const API_BASE_URL = "/api";
+const API_BASE_URL = "http://localhost:5001/api";
 // const API_BASE_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
-const SOCKET_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
+const SOCKET_URL = "http://localhost:5001";
+// const SOCKET_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 const socket = io(SOCKET_URL, { autoConnect: false });
 
 function PaperTradeHistoryView() {
@@ -539,9 +540,18 @@ export default function App() {
 
       socket.on("price-change", handlePriceChange);
       socket.on("candlestick", (data) => {
-        console.log(data);
-        // Candlestick websocket updates
-        // For now ticker price pushes live chart nicely
+        if (data && data.time) {
+          setCandles((prev) => {
+            // Update existing candle or prepend new one
+            const index = prev.findIndex(c => c.time === data.time);
+            if (index !== -1) {
+              const updated = [...prev];
+              updated[index] = { ...updated[index], ...data };
+              return updated;
+            }
+            return [data, ...prev];
+          });
+        }
       });
 
       // Fetch live balance for compounding/bankruptcy
@@ -628,10 +638,10 @@ export default function App() {
         runLiveStrategy();
       }, 60000);
 
-      // Poll ticker every 1 second (light call)
+      // Poll ticker every 60 seconds (fallback)
       tickerIntervalId = window.setInterval(() => {
         fetchTicker();
-      }, 5000);
+      }, 60000);
     }
 
     return () => {
@@ -2197,7 +2207,7 @@ function LiveMarketChart({
     const sortedData = [...candles]
       .sort((a, b) => a.time - b.time)
       .map((c) => ({
-        time: (Math.floor(c.time / 1000) + istOffset) as any,
+        time: (c.time + istOffset) as any,
         open: c.open,
         high: c.high,
         low: c.low,
