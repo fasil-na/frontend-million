@@ -250,34 +250,61 @@ export default function App() {
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
   const [isBankruptcy, setIsBankruptcy] = useState(false);
   const [dynamicMaxLeverage, setDynamicMaxLeverage] = useState<number | null>(null);
+  const isSettingsLoaded = useRef(false);
 
-  // Persistence Effects
+  // Persistence Effects (Sync with Backend)
+  const updateBackendSettings = async (updates: any) => {
+    if (!isSettingsLoaded.current) return;
+    try {
+      await axios.post(`${API_BASE_URL}/settings`, updates);
+    } catch (err) {
+      console.error("Failed to update backend settings:", err);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem("trade_pair", pair);
+    updateBackendSettings({ pair });
   }, [pair]);
+
   useEffect(() => {
     localStorage.setItem("trade_strategy", selectedStrategyId);
+    updateBackendSettings({ selectedStrategyId });
   }, [selectedStrategyId]);
+
   useEffect(() => {
     localStorage.setItem("trade_capital", initialCapital.toString());
+    updateBackendSettings({ initialCapital });
   }, [initialCapital]);
+
   useEffect(() => {
     localStorage.setItem("trade_interval", liveInterval);
+    updateBackendSettings({ timeInterval: liveInterval });
   }, [liveInterval]);
+
   useEffect(() => {
     localStorage.setItem("trade_live_monitor", isLiveMonitoring.toString());
+    updateBackendSettings({ isLiveMonitoring });
   }, [isLiveMonitoring]);
+
   useEffect(() => {
     localStorage.setItem("trade_live_trading", isLiveTrading.toString());
+    updateBackendSettings({ isLiveTrading });
   }, [isLiveTrading]);
+
   useEffect(() => {
     localStorage.setItem("trade_paper_trading", isPaperTrading.toString());
+    updateBackendSettings({ isPaperTrading });
   }, [isPaperTrading]);
 
-  // Lot Sizing State
+  // Leverage & Trailing SL
   const [maxPositionSize, setMaxPositionSize] = useState(100);
   const [leverage, setLeverage] = useState(0);
   const [trailingSL, setTrailingSL] = useState(true);
+
+  useEffect(() => {
+    updateBackendSettings({ leverage });
+  }, [leverage]);
 
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(
     null,
@@ -294,7 +321,6 @@ export default function App() {
   const [configTab, setConfigTab] = useState<"manual" | "optimize">("manual");
   const [startYear, setStartYear] = useState(new Date().getFullYear() - 3);
   const [isSilent, setIsSilent] = useState(false);
-
 
   // Audio Alert
   const playAlert = useCallback(() => {
@@ -319,8 +345,28 @@ export default function App() {
     }
   };
 
+  const fetchSettings = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/settings`);
+      const s = response.data;
+      if (s.pair) setPair(s.pair);
+      if (s.selectedStrategyId) setSelectedStrategyId(s.selectedStrategyId);
+      if (s.initialCapital) setInitialCapital(s.initialCapital);
+      if (s.timeInterval) setLiveInterval(s.timeInterval);
+      if (s.isLiveMonitoring !== undefined) setIsLiveMonitoring(s.isLiveMonitoring);
+      if (s.isLiveTrading !== undefined) setIsLiveTrading(s.isLiveTrading);
+      if (s.isPaperTrading !== undefined) setIsPaperTrading(s.isPaperTrading);
+      if (s.leverage !== undefined) setLeverage(s.leverage);
+      isSettingsLoaded.current = true;
+    } catch (err) {
+      console.error("Failed to fetch settings:", err);
+      isSettingsLoaded.current = true; // Still allow updates even if fetch fails
+    }
+  };
+
   useEffect(() => {
     fetchStrategies();
+    fetchSettings();
   }, []);
   const fetchMarketData = async () => {
     try {
