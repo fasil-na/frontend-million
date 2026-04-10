@@ -26,7 +26,6 @@ import {
   Database,
   Shield,
   Zap,
-  RefreshCw,
   Settings2,
   Play,
   PieChart,
@@ -35,11 +34,7 @@ import {
   X,
   Volume2,
   VolumeX,
-  FlaskConical,
-  Filter,
-  Trophy,
-  ChevronUp,
-  ChevronDown,
+  RefreshCw,
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -221,7 +216,7 @@ function PaperTradeHistoryView() {
 }
 
 export default function App() {
-  const [view, setView] = useState<"backtest" | "trade" | "strategy-builder" | "paper-history">(
+  const [view, setView] = useState<"backtest" | "trade" | "paper-history">(
     "trade",
   );
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -300,57 +295,6 @@ export default function App() {
   const [startYear, setStartYear] = useState(new Date().getFullYear() - 3);
   const [isSilent, setIsSilent] = useState(false);
 
-  // ── Strategy Builder State ──
-  const [sbMonth, setSbMonth] = useState(new Date().getMonth());
-  const [sbYear, setSbYear] = useState(new Date().getFullYear());
-  const [sbInterval, setSbInterval] = useState("15");
-  const [sbPerTradeAmount, setSbPerTradeAmount] = useState(100);
-  const [sbLeverage, setSbLeverage] = useState(0);
-  const [sbUseTrailingSL, setSbUseTrailingSL] = useState(true);
-  const [sbLoading, setSbLoading] = useState(false);
-  const [sbResult, setSbResult] = useState<any | null>(null);
-  const [sbError, setSbError] = useState<string | null>(null);
-  const [sbSortKey, setSbSortKey] = useState<string>("totalPL");
-  const [sbSortDir, setSbSortDir] = useState<"asc" | "desc">("desc");
-
-  const runStrategyBuilder = async () => {
-    try {
-      setSbLoading(true);
-      setSbError(null);
-      setSbResult(null);
-      const response = await axios.post(`${API_BASE_URL}/strategy-builder`, {
-        pair,
-        month: sbMonth,
-        year: sbYear,
-        resolution: sbInterval,
-        perTradeAmount: sbPerTradeAmount,
-        leverage: sbLeverage,
-        useTrailingSL: sbUseTrailingSL,
-      });
-      setSbResult(response.data);
-    } catch (err: any) {
-      setSbError(err.response?.data?.error || err.message || "Failed");
-    } finally {
-      setSbLoading(false);
-    }
-  };
-
-  const sbSorted = useMemo(() => {
-    if (!sbResult?.results) return [];
-    return [...sbResult.results].sort((a: any, b: any) => {
-      const va = a[sbSortKey] ?? a.config?.[sbSortKey] ?? 0;
-      const vb = b[sbSortKey] ?? b.config?.[sbSortKey] ?? 0;
-      return sbSortDir === "desc" ? vb - va : va - vb;
-    });
-  }, [sbResult, sbSortKey, sbSortDir]);
-
-  const handleSbSort = (key: string) => {
-    if (sbSortKey === key) setSbSortDir((d) => (d === "desc" ? "asc" : "desc"));
-    else {
-      setSbSortKey(key);
-      setSbSortDir("desc");
-    }
-  };
 
   // Audio Alert
   const playAlert = useCallback(() => {
@@ -378,7 +322,6 @@ export default function App() {
   useEffect(() => {
     fetchStrategies();
   }, []);
-
   const fetchMarketData = async () => {
     try {
       const response = await axios.get<ApiResponse>(
@@ -396,33 +339,6 @@ export default function App() {
       }
     } catch (err) {
       console.error("fetchMarketData failed:", err);
-    }
-  };
-
-  const fetchTicker = async () => {
-    try {
-      const response = await axios.get<{ last_price: string }>(
-        `${API_BASE_URL}/ticker`,
-        {
-          params: { pair: pair.replace("B-", "").replace("_", "") },
-        },
-      );
-      const price = parseFloat(response.data.last_price);
-      setTickerPrice(price);
-
-      // Update the last candle in the list to reflect the live price
-      setCandles((prev) => {
-        if (prev.length === 0) return prev;
-        const newCandles = [...prev];
-        const last = { ...newCandles[0] };
-        last.close = price;
-        if (price > last.high) last.high = price;
-        if (price < last.low) last.low = price;
-        newCandles[0] = last;
-        return newCandles;
-      });
-    } catch (err) {
-      console.error("Ticker fetch failed:", err);
     }
   };
 
@@ -507,12 +423,10 @@ export default function App() {
   // Polling for Live Monitoring
   useEffect(() => {
     let candleIntervalId: any;
-    let tickerIntervalId: any;
 
     if (isLiveMonitoring && view === "trade") {
       // Initial fetch
       fetchMarketData();
-      fetchTicker();
 
       // Setup WebSocket Link
       if (!socket.connected) {
@@ -540,6 +454,7 @@ export default function App() {
 
       socket.on("price-change", handlePriceChange);
       socket.on("candlestick", (data) => {
+        console.log(data,'data=====')
         if (data && data.time) {
           setCandles((prev) => {
             // Update existing candle or prepend new one
@@ -638,10 +553,6 @@ export default function App() {
         runLiveStrategy();
       }, 60000);
 
-      // Poll ticker every 60 seconds (fallback)
-      tickerIntervalId = window.setInterval(() => {
-        fetchTicker();
-      }, 60000);
     }
 
     return () => {
@@ -649,7 +560,6 @@ export default function App() {
       socket.off("candlestick");
       socket.disconnect();
       if (candleIntervalId) clearInterval(candleIntervalId);
-      if (tickerIntervalId) clearInterval(tickerIntervalId);
     };
   }, [
     isLiveMonitoring,
@@ -729,12 +639,6 @@ export default function App() {
               onClick={() => setView("backtest")}
               icon={Settings2}
               label="Backtest"
-            />
-            <ViewToggle
-              active={view === "strategy-builder"}
-              onClick={() => setView("strategy-builder")}
-              icon={FlaskConical}
-              label="Strategy Builder"
             />
             <ViewToggle
               active={view === "paper-history"}
@@ -1291,20 +1195,20 @@ export default function App() {
                       value={`$${backtestResult.summary.totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       icon={TrendingUp}
                       color={
-                        backtestResult.summary.totalProfit >= 0
+                        backtestResult?.summary?.totalProfit >= 0
                           ? "text-emerald-400"
                           : "text-rose-400"
                       }
                     />
                     <ResultCard
                       title="Success"
-                      value={backtestResult.summary.successCount.toString()}
+                      value={backtestResult?.summary?.successCount?.toString()}
                       icon={Zap}
                       color="text-emerald-400"
                     />
                     <ResultCard
                       title="Failed"
-                      value={backtestResult.summary.failedCount.toString()}
+                      value={backtestResult?.summary?.failedCount?.toString()}
                       icon={AlertCircle}
                       color="text-rose-400"
                     />
@@ -1599,31 +1503,6 @@ export default function App() {
           </motion.div>
         )}
 
-        {view === "strategy-builder" && (
-          <StrategyBuilderView
-            sbMonth={sbMonth}
-            setSbMonth={setSbMonth}
-            sbYear={sbYear}
-            setSbYear={setSbYear}
-            sbInterval={sbInterval}
-            setSbInterval={setSbInterval}
-            sbPerTradeAmount={sbPerTradeAmount}
-            setSbPerTradeAmount={setSbPerTradeAmount}
-            sbLeverage={sbLeverage}
-            setSbLeverage={setSbLeverage}
-            sbUseTrailingSL={sbUseTrailingSL}
-            setSbUseTrailingSL={setSbUseTrailingSL}
-            sbLoading={sbLoading}
-            sbResult={sbResult}
-            sbError={sbError}
-            sbSorted={sbSorted}
-            sbSortKey={sbSortKey}
-            sbSortDir={sbSortDir}
-            handleSbSort={handleSbSort}
-            runStrategyBuilder={runStrategyBuilder}
-            dynamicMaxLeverage={dynamicMaxLeverage}
-          />
-        )}
 
         {view === "trade" && (
           <motion.div
@@ -2778,660 +2657,3 @@ function InputGroup({
 //  Strategy Builder View
 // ════════════════════════════════════════════════════════════
 
-const SB_MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-function SbSortIcon({
-  colKey,
-  sortKey,
-  sortDir,
-}: {
-  colKey: string;
-  sortKey: string;
-  sortDir: "asc" | "desc";
-}) {
-  if (colKey !== sortKey)
-    return <ChevronUp className="w-3 h-3 opacity-20 inline ml-1" />;
-  return sortDir === "desc" ? (
-    <ChevronDown className="w-3 h-3 text-violet-400 inline ml-1" />
-  ) : (
-    <ChevronUp className="w-3 h-3 text-violet-400 inline ml-1" />
-  );
-}
-
-function StrategyBuilderView({
-  sbMonth,
-  setSbMonth,
-  sbYear,
-  setSbYear,
-  sbInterval,
-  setSbInterval,
-  sbPerTradeAmount,
-  setSbPerTradeAmount,
-  sbLeverage,
-  setSbLeverage,
-  sbUseTrailingSL,
-  setSbUseTrailingSL,
-  sbLoading,
-  sbResult,
-  sbError,
-  sbSorted,
-  sbSortKey,
-  sbSortDir,
-  handleSbSort,
-  runStrategyBuilder,
-  dynamicMaxLeverage,
-}: any) {
-  const profitableCount =
-    sbResult?.results?.filter((r: any) => r.totalPL > 0).length ?? 0;
-
-  const inputCls =
-    "w-full bg-slate-950 border border-white/10 rounded-2xl px-4 py-3 text-white font-bold outline-none focus:border-violet-500/50 transition-colors text-sm";
-
-  const cols: {
-    key: string;
-    label: string;
-    numeric?: boolean;
-    configKey?: string;
-  }[] = [
-      { key: "rank", label: "#" },
-      { key: "emaShort", label: "EMA S", configKey: "emaShort" },
-      { key: "emaLong", label: "EMA L", configKey: "emaLong" },
-      { key: "rsiPeriod", label: "RSI P", configKey: "rsiPeriod" },
-      { key: "rsiThreshold", label: "RSI Min", configKey: "rsiThreshold" },
-      { key: "volMultiplier", label: "Vol×", configKey: "volMultiplier" },
-      { key: "atrPeriod", label: "ATR P", configKey: "atrPeriod" },
-      { key: "slMult", label: "SL ×", configKey: "slMult" },
-      { key: "trailingSLMult", label: "Trail×", configKey: "trailingSLMult" },
-      { key: "totalTrades", label: "Trades", numeric: true },
-      { key: "wins", label: "Wins", numeric: true },
-      { key: "losses", label: "Loss", numeric: true },
-      { key: "winRate", label: "Win %", numeric: true },
-      { key: "totalPL", label: "Total P/L", numeric: true },
-      { key: "avgWin", label: "Avg Win", numeric: true },
-      { key: "avgLoss", label: "Avg Loss", numeric: true },
-      { key: "riskReward", label: "R:R", numeric: true },
-    ];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-8"
-    >
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-violet-600 to-fuchsia-400 flex items-center justify-center">
-              <FlaskConical className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-3xl font-black tracking-tighter">
-              Strategy <span className="text-violet-400">Builder</span>
-            </h1>
-          </div>
-          <p className="text-slate-500 text-sm max-w-xl leading-relaxed">
-            Tests every possible combination of EMA, RSI, Volume, and ATR filter
-            parameters on your chosen month of market data. Results are ranked
-            by total profit — find the configuration that actually works.
-          </p>
-        </div>
-        {sbResult && (
-          <div className="flex items-center gap-5 shrink-0">
-            <div className="text-right">
-              <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                Combinations
-              </p>
-              <p className="text-2xl font-black text-white">
-                {sbResult.totalCombinations?.toLocaleString()}
-              </p>
-            </div>
-            <div className="w-px h-12 bg-white/5" />
-            <div className="text-right">
-              <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                With Trades
-              </p>
-              <p className="text-2xl font-black text-violet-400">
-                {sbResult.testedCombinations?.toLocaleString()}
-              </p>
-            </div>
-            <div className="w-px h-12 bg-white/5" />
-            <div className="text-right">
-              <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                Profitable
-              </p>
-              <p className="text-2xl font-black text-emerald-400">
-                {profitableCount?.toLocaleString()}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Control Panel */}
-      <div className="p-8 bg-slate-900/60 border border-white/10 rounded-[2.5rem] shadow-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 rounded-xl bg-violet-600/20 border border-violet-500/20">
-            <Filter className="w-5 h-5 text-violet-400" />
-          </div>
-          <h2 className="text-lg font-black tracking-tight">Configuration</h2>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-              Month
-            </label>
-            <select
-              value={sbMonth}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                setSbMonth(Number(e.target.value))
-              }
-              className={inputCls}
-            >
-              {SB_MONTHS.map((m, i) => (
-                <option key={m} value={i}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-              Year
-            </label>
-            <select
-              value={sbYear}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                setSbYear(Number(e.target.value))
-              }
-              className={inputCls}
-            >
-              {[2021, 2022, 2023, 2024, 2025, 2026].map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-              Interval
-            </label>
-            <select
-              value={sbInterval}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                setSbInterval(e.target.value)
-              }
-              className={inputCls}
-            >
-              {["1", "5", "15", "30", "60"].map((iv) => (
-                <option key={iv} value={iv}>
-                  {iv === "60" ? "1H" : iv + " Min"}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-              Per Trade Amount ($)
-            </label>
-            <input
-              type="number"
-              value={sbPerTradeAmount}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setSbPerTradeAmount(Number(e.target.value))
-              }
-              className={inputCls}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-              Leverage {dynamicMaxLeverage ? `(Max: ${dynamicMaxLeverage}x)` : "(0=Max)"}
-            </label>
-            <input
-              type="number"
-              value={sbLeverage}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setSbLeverage(Number(e.target.value))
-              }
-              className={inputCls}
-            />
-          </div>
-          <div className="space-y-2 flex flex-col justify-end">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-              Trailing SL
-            </label>
-            <button
-              onClick={() => setSbUseTrailingSL(!sbUseTrailingSL)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-3 rounded-2xl border font-black text-xs uppercase tracking-widest transition-all",
-                sbUseTrailingSL
-                  ? "bg-violet-600/20 border-violet-500/30 text-violet-300"
-                  : "bg-slate-800/50 border-white/5 text-slate-500",
-              )}
-            >
-              <div
-                className={cn(
-                  "w-8 h-4 rounded-full relative transition-all shrink-0",
-                  sbUseTrailingSL ? "bg-violet-600" : "bg-slate-700",
-                )}
-              >
-                <div
-                  className={cn(
-                    "absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all",
-                    sbUseTrailingSL ? "left-[18px]" : "left-0.5",
-                  )}
-                />
-              </div>
-              {sbUseTrailingSL ? "ON" : "OFF"}
-            </button>
-          </div>
-        </div>
-
-        <button
-          onClick={runStrategyBuilder}
-          disabled={sbLoading}
-          className="w-full py-4 rounded-[1.5rem] bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black text-sm uppercase tracking-widest shadow-2xl shadow-violet-600/25 transition-all flex items-center justify-center gap-3 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {sbLoading ? (
-            <>
-              <RefreshCw className="w-5 h-5 animate-spin" /> Scanning all
-              combinations…
-            </>
-          ) : (
-            <>
-              <FlaskConical className="w-5 h-5" /> Find Best Filter Combinations
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Error */}
-      {sbError && (
-        <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-3xl flex items-center gap-4">
-          <AlertCircle className="w-6 h-6 text-rose-400 shrink-0" />
-          <p className="text-sm text-rose-300 font-bold">{sbError}</p>
-        </div>
-      )}
-
-      {/* Loading Indicator */}
-      {sbLoading && (
-        <div className="flex flex-col items-center justify-center py-16 gap-8">
-          <div className="relative">
-            <div className="w-32 h-32 rounded-full border-4 border-violet-600/10 border-t-violet-500 animate-spin" />
-            <FlaskConical className="w-10 h-10 text-violet-400 absolute inset-0 m-auto" />
-          </div>
-
-          <div className="text-center space-y-2">
-            <p className="text-2xl font-black text-white tracking-tight">
-              Scanning Market Dynamics
-            </p>
-            <p className="text-sm text-slate-500 max-w-md mx-auto">
-              Testing thousands of filter combinations on {SB_MONTHS[sbMonth]}{" "}
-              {sbYear} data to find the most profitable configuration.
-            </p>
-          </div>
-
-          {/* Real-time Parameter Scanner UI */}
-          <div className="w-full max-w-2xl p-8 bg-slate-900/40 border border-violet-500/20 rounded-[2.5rem] backdrop-blur-xl relative overflow-hidden group">
-            <div className="absolute inset-0 bg-gradient-to-r from-violet-600/5 to-transparent animate-pulse" />
-
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-violet-400 animate-pulse" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">
-                    Active Engine Scan
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">
-                    Processing...
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <ScannerStat
-                  label="EMA Combo"
-                  value={`${[5, 9, 12, 20][Math.floor(Date.now() / 200) % 4]}/${[26, 50, 100, 200][Math.floor(Date.now() / 300) % 4]}`}
-                />
-                <ScannerStat
-                  label="RSI Filter"
-                  value={`${[7, 9, 14][Math.floor(Date.now() / 150) % 3]} @ >${[45, 50, 55][Math.floor(Date.now() / 400) % 3]}`}
-                />
-                <ScannerStat
-                  label="Vol Mult"
-                  value={`${[1.0, 1.2, 1.5][Math.floor(Date.now() / 250) % 3]}x`}
-                />
-                <ScannerStat
-                  label="ATR SL"
-                  value={`${[1.0, 1.5, 2.0, 2.5][Math.floor(Date.now() / 350) % 4]}x`}
-                />
-              </div>
-
-              <div className="mt-8 h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-violet-500"
-                  initial={{ width: "0%" }}
-                  animate={{ width: "100%" }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Results */}
-      {!sbLoading && sbResult && sbSorted.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-8"
-        >
-          {/* Top-3 Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {sbSorted.slice(0, 3).map((r: any, idx: number) => {
-              const medals = ["🥇", "🥈", "🥉"];
-              const colors = [
-                "from-amber-600/20 to-yellow-500/5 border-amber-500/20",
-                "from-slate-500/20 to-slate-400/5 border-slate-500/20",
-                "from-orange-700/20 to-amber-700/5 border-orange-600/20",
-              ];
-              return (
-                <div
-                  key={idx}
-                  className={cn(
-                    "p-6 bg-gradient-to-br rounded-3xl border space-y-4",
-                    colors[idx],
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl">{medals[idx]}</span>
-                    <span
-                      className={cn(
-                        "text-xl font-black tracking-tight",
-                        r.totalPL > 0 ? "text-emerald-400" : "text-rose-400",
-                      )}
-                    >
-                      {r.totalPL > 0 ? "+" : ""}
-                      {r.totalPL.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">
-                        Win Rate
-                      </p>
-                      <p className="text-white font-black">
-                        {r.winRate.toFixed(1)}%
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">
-                        Trades
-                      </p>
-                      <p className="text-white font-black">{r.totalTrades}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">
-                        EMA
-                      </p>
-                      <p className="text-white font-black">
-                        {r.config.emaShort}/{r.config.emaLong}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">
-                        RSI
-                      </p>
-                      <p className="text-white font-black">
-                        {r.config.rsiPeriod} &gt; {r.config.rsiThreshold}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">
-                        Vol ×
-                      </p>
-                      <p className="text-white font-black">
-                        {r.config.volMultiplier}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">
-                        ATR SL Mult
-                      </p>
-                      <p className="text-white font-black">
-                        {r.config.slMult}×
-                      </p>
-                    </div>
-                    {r.riskReward !== null && (
-                      <div className="col-span-2">
-                        <p className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">
-                          Risk : Reward
-                        </p>
-                        <p className="text-white font-black">
-                          1 : {r.riskReward}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Full Ranked Table */}
-          <div className="bg-slate-900/40 border border-white/10 rounded-[2.5rem] overflow-hidden">
-            <div className="px-8 py-5 border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Trophy className="w-5 h-5 text-violet-400" />
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">
-                  All Ranked Combinations
-                </h3>
-                <span className="px-3 py-1 rounded-full bg-violet-600/20 text-violet-300 text-[10px] font-black">
-                  Top {sbSorted.length}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest hidden md:block">
-                Click headers to sort
-              </p>
-            </div>
-
-            <div className="overflow-x-auto max-h-[640px] overflow-y-auto">
-              <table
-                className="w-full text-left"
-                style={{ minWidth: "1100px" }}
-              >
-                <thead className="sticky top-0 z-10">
-                  <tr className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-slate-950/90 backdrop-blur-sm">
-                    {cols.map((col) => (
-                      <th
-                        key={col.key}
-                        onClick={() =>
-                          col.key !== "rank" &&
-                          handleSbSort(col.configKey || col.key)
-                        }
-                        className={cn(
-                          "px-4 py-4 whitespace-nowrap select-none",
-                          col.key !== "rank" &&
-                          "cursor-pointer hover:text-violet-300 transition-colors",
-                          col.numeric && "text-right",
-                        )}
-                      >
-                        {col.label}
-                        {col.key !== "rank" && (
-                          <SbSortIcon
-                            colKey={col.configKey || col.key}
-                            sortKey={sbSortKey}
-                            sortDir={sbSortDir}
-                          />
-                        )}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/[0.03]">
-                  {sbSorted.map((r: any, i: number) => {
-                    const isProfitable = r.totalPL > 0;
-                    return (
-                      <tr
-                        key={i}
-                        className={cn(
-                          "group transition-colors hover:bg-white/[0.025]",
-                          i < 3 && "bg-violet-600/[0.04]",
-                        )}
-                      >
-                        <td className="px-4 py-3">
-                          <span
-                            className={cn(
-                              "w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black",
-                              i === 0
-                                ? "bg-amber-500/20 text-amber-400"
-                                : i === 1
-                                  ? "bg-slate-500/20 text-slate-300"
-                                  : i === 2
-                                    ? "bg-orange-700/20 text-orange-500"
-                                    : "bg-slate-900 text-slate-600",
-                            )}
-                          >
-                            {i + 1}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                          {r.config.emaShort}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                          {r.config.emaLong}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                          {r.config.rsiPeriod}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                          {r.config.rsiThreshold}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                          {r.config.volMultiplier}×
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                          {r.config.atrPeriod}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                          {r.config.slMult}×
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono text-slate-400">
-                          {r.config.trailingSLMult}×
-                        </td>
-                        <td className="px-4 py-3 text-xs text-right text-slate-300 font-bold">
-                          {r.totalTrades}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-right text-emerald-400 font-bold">
-                          {r.wins}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-right text-rose-400 font-bold">
-                          {r.losses}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-right font-bold">
-                          <span
-                            className={cn(
-                              r.winRate >= 60
-                                ? "text-emerald-400"
-                                : r.winRate >= 45
-                                  ? "text-amber-400"
-                                  : "text-rose-400",
-                            )}
-                          >
-                            {r.winRate.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td
-                          className={cn(
-                            "px-4 py-3 text-sm text-right font-black",
-                            isProfitable ? "text-emerald-400" : "text-rose-400",
-                          )}
-                        >
-                          {isProfitable ? "+" : ""}
-                          {r.totalPL.toFixed(4)}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-right text-emerald-300 font-mono">
-                          {r.avgWin > 0 ? `+${r.avgWin.toFixed(4)}` : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-right text-rose-300 font-mono">
-                          {r.avgLoss > 0 ? `-${r.avgLoss.toFixed(4)}` : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-right font-bold text-slate-300">
-                          {r.riskReward !== null ? `1:${r.riskReward}` : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Empty state */}
-      {!sbLoading && !sbResult && !sbError && (
-        <div className="flex flex-col items-center justify-center py-28 gap-6 border-2 border-dashed border-white/5 rounded-[3rem]">
-          <div className="w-20 h-20 rounded-3xl bg-slate-900 flex items-center justify-center">
-            <FlaskConical className="w-10 h-10 text-violet-500/40" />
-          </div>
-          <div className="text-center">
-            <h3 className="text-xl font-bold text-slate-400 mb-2">
-              Ready to Discover
-            </h3>
-            <p className="text-slate-600 text-sm max-w-sm">
-              Select your target month, interval &amp; capital above, then run
-              the scanner to find the best-performing filter configurations.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {!sbLoading && sbResult && sbSorted.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 gap-4 bg-amber-500/5 border border-amber-500/10 rounded-3xl">
-          <AlertCircle className="w-10 h-10 text-amber-400" />
-          <p className="text-amber-300 font-bold">
-            No combinations produced any trades for this period.
-          </p>
-          <p className="text-slate-500 text-sm">
-            Try a shorter interval (5m / 15m) or a different month with higher
-            volatility.
-          </p>
-        </div>
-      )}
-    </motion.div>
-  );
-}
-
-function ScannerStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-[9px] font-black uppercase tracking-widest text-slate-600">
-        {label}
-      </p>
-      <p className="text-sm font-mono font-black text-violet-100">{value}</p>
-    </div>
-  );
-}
