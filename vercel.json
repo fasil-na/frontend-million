@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api/:path*"
+    },
+    {
+      "source": "/socket.io/:path*",
+      "destination": "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/socket.io/:path*"
     }
   ]
 }

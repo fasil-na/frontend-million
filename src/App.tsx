@@ -120,7 +120,7 @@ interface Strategy {
 const API_BASE_URL = "/api";
 // const SOCKET_URL = "http://localhost:5001";
 const SOCKET_URL = "/";
-const socket = io(SOCKET_URL, { autoConnect: false });
+const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling"] });
 
 function PaperTradeHistoryView() {
   const [trades, setTrades] = useState<any[]>([]);
