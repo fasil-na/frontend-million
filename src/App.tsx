@@ -35,6 +35,7 @@ import {
   Volume2,
   VolumeX,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -115,10 +116,10 @@ interface Strategy {
 
 
 
-const API_BASE_URL = "http://localhost:5001/api";
-// const API_BASE_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
-const SOCKET_URL = "http://localhost:5001";
-// const SOCKET_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
+// const API_BASE_URL = "http://localhost:5001/api";
+const API_BASE_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
+// const SOCKET_URL = "http://localhost:5001";
+const SOCKET_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 const socket = io(SOCKET_URL, { autoConnect: false });
 
 function PaperTradeHistoryView() {
@@ -141,6 +142,28 @@ function PaperTradeHistoryView() {
     }
   };
 
+  const handleDelete = async (entryTime: string) => {
+    if (!window.confirm("Delete this trade record?")) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/paper-trades/${entryTime}`);
+      setTrades(prev => prev.filter(t => t.entryTime !== entryTime));
+    } catch (err) {
+      console.error("Failed to delete trade", err);
+      alert("Delete failed");
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm("CLEAR ALL paper trade history? This cannot be undone.")) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/paper-trades/clear`);
+      setTrades([]);
+    } catch (err) {
+      console.error("Failed to clear history", err);
+      alert("Clear failed");
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -154,10 +177,16 @@ function PaperTradeHistoryView() {
             Simulated Executions Log
           </p>
         </div>
-        <button onClick={fetchTrades} className="px-5 py-3 rounded-xl bg-slate-900 border border-white/5 hover:bg-slate-800 transition active:scale-95 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-300">
-          <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          Reload
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={handleClearAll} className="px-5 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition active:scale-95 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-rose-400">
+            <Trash2 className="w-4 h-4" />
+            Clear All
+          </button>
+          <button onClick={fetchTrades} className="px-5 py-3 rounded-xl bg-slate-900 border border-white/5 hover:bg-slate-800 transition active:scale-95 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-300">
+            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            Reload
+          </button>
+        </div>
       </div>
 
       <div className="bg-slate-900/40 border border-white/10 rounded-[2.5rem] overflow-hidden">
@@ -172,24 +201,28 @@ function PaperTradeHistoryView() {
               No Paper Trades Recorded Yet
             </div>
           ) : (
-            <table className="w-full text-left">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-950/40">
+                <tr className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-950/40 sticky top-0 z-10">
                   <th className="px-8 py-5">Date / Time</th>
                   <th className="px-5 py-5">Pair</th>
                   <th className="px-5 py-5">Type / Price</th>
                   <th className="px-5 py-5 text-right">Profit</th>
                   <th className="px-10 py-5 text-center">Status</th>
+                  <th className="px-8 py-5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {[...trades].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()).map(t => (
-                  <tr key={t.id || t.recordedAt} className="bg-slate-900/20 hover:bg-slate-800/40 transition-colors">
+                {[...trades].sort((a, b) => new Date(b.recordedAt || b.entryTime).getTime() - new Date(a.recordedAt || a.entryTime).getTime()).map(t => (
+                  <tr key={t.entryTime} className="bg-slate-900/20 hover:bg-slate-800/40 transition-colors group">
                     <td className="px-8 py-4">
-                      <div className="text-sm font-bold text-white">{dayjs(t.recordedAt).format("MMM D, YYYY")}</div>
-                      <div className="text-[10px] text-slate-500">{dayjs(t.recordedAt).format("HH:mm:ss")}</div>
+                      <div className="text-sm font-bold text-white">{dayjs(t.entryTime).format("MMM D, YYYY")}</div>
+                      <div className="text-[10px] text-slate-500">{dayjs(t.entryTime).format("HH:mm:ss")}</div>
                     </td>
-                    <td className="px-5 py-4 text-xs font-bold text-slate-300">{t.pair}</td>
+                    <td className="px-5 py-4">
+                      <div className="text-xs font-bold text-slate-300">{t.pair}</div>
+                      <div className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{t.type || 'auto'}</div>
+                    </td>
                     <td className="px-5 py-4">
                       <div className={cn("text-xs font-black uppercase", t.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>{t.direction}</div>
                       <div className="text-[10px] text-slate-400">${t.entryPrice?.toFixed(2)}</div>
@@ -203,6 +236,11 @@ function PaperTradeHistoryView() {
                       <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest", t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-slate-800 text-slate-400 border border-white/5')}>
                         {t.status}
                       </span>
+                    </td>
+                    <td className="px-8 py-4 text-right">
+                      <button onClick={() => handleDelete(t.entryTime)} className="p-2.5 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all active:scale-90 opacity-0 group-hover:opacity-100">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
