@@ -68,6 +68,8 @@ interface Trade {
   units?: number;
   sl: number;
   tp?: number;
+  pnlPercent?: number;
+  trailingCount?: number;
 }
 
 interface BacktestResponse {
@@ -116,10 +118,10 @@ interface Strategy {
 
 
 
-// const API_BASE_URL = "http://localhost:5001/api";
-const API_BASE_URL = "/api";
-// const SOCKET_URL = "http://localhost:5001";
-const SOCKET_URL = "/";
+const API_BASE_URL = "http://localhost:5001/api";
+// const API_BASE_URL = "/api";
+const SOCKET_URL = "http://localhost:5001";
+// const SOCKET_URL = "/";
 const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling"] });
 
 function PaperTradeHistoryView() {
@@ -195,7 +197,7 @@ function PaperTradeHistoryView() {
             Recorded Trades List ({trades.length})
           </h3>
         </div>
-        <div className="max-h-[600px] overflow-y-auto">
+        <div className="max-h-[600px] overflow-auto no-scrollbar">
           {trades.length === 0 ? (
             <div className="p-12 text-center text-slate-500 font-bold uppercase tracking-widest text-xs">
               No Paper Trades Recorded Yet
@@ -359,6 +361,7 @@ export default function App() {
   const [configTab, setConfigTab] = useState<"manual" | "optimize">("manual");
   const [startYear, setStartYear] = useState(new Date().getFullYear() - 3);
   const [isSilent, setIsSilent] = useState(false);
+  const [paperTrades, setPaperTrades] = useState<Trade[]>([]);
 
   // Audio Alert
   const playAlert = useCallback(() => {
@@ -402,9 +405,19 @@ export default function App() {
     }
   };
 
+  const fetchPaperTrades = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/paper-trades`);
+      setPaperTrades(data);
+    } catch (err) {
+      console.error("Failed to fetch paper trades", err);
+    }
+  };
+
   useEffect(() => {
     fetchStrategies();
     fetchSettings();
+    fetchPaperTrades();
   }, []);
   const fetchMarketData = async () => {
     try {
@@ -537,6 +550,10 @@ export default function App() {
       };
 
       socket.on("price-change", handlePriceChange);
+      socket.on("paper-trade-update", () => {
+        console.log("Paper trade updated on backend, refreshing...");
+        fetchPaperTrades();
+      });
       socket.on("candlestick", (data) => {
         if (data && data.time) {
           setCandles((prev) => {
@@ -604,7 +621,9 @@ export default function App() {
                     axios.post(`${API_BASE_URL}/paper-trade`, {
                       trade: latestTrade,
                       pair: pair
-                    }).catch(err => console.error("Paper trade record failed:", err));
+                    })
+                      .then(() => fetchPaperTrades())
+                      .catch(err => console.error("Paper trade record failed:", err));
                   }
 
                   // ONLY execute on exchange if Auto-Trade is ON
@@ -634,6 +653,7 @@ export default function App() {
           }
         };
         runLiveStrategy();
+        fetchPaperTrades();
       }, 60000);
 
     }
@@ -675,6 +695,37 @@ export default function App() {
     );
   }, [backtestResult]);
 
+  const combinedActiveTrades = useMemo(() => {
+    const backtestOpen = backtestResult?.trades.filter(t => t.status === 'open') || [];
+    const paperOpen = paperTrades.filter(t => t.status === 'open') || [];
+    
+    // De-duplicate by entryTime to avoid double showing
+    const seen = new Set();
+    const combined: Trade[] = [];
+    
+    [...paperOpen, ...backtestOpen].forEach(t => {
+      const key = `${t.entryTime}-${t.direction}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const trade = { ...t };
+        // Recalculate profit if ticker price is available for open positions
+        if (trade.status === 'open' && tickerPrice) {
+          const diff = trade.direction === 'buy' ? (tickerPrice - trade.entryPrice) : (trade.entryPrice - tickerPrice);
+          // If units not present, estimate from current capital setting
+          const currentLeverage = leverage || 1;
+          const units = trade.units || (initialCapital * currentLeverage / trade.entryPrice);
+          trade.profit = diff * units;
+          
+          const margin = (units * trade.entryPrice) / currentLeverage;
+          trade.pnlPercent = (trade.profit / margin) * 100;
+        }
+        combined.push(trade);
+      }
+    });
+    
+    return combined;
+  }, [backtestResult, paperTrades, tickerPrice, initialCapital]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30">
       {/* Background decoration */}
@@ -694,47 +745,47 @@ export default function App() {
         <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-indigo-600/10 blur-[120px]" />
       </div>
 
-      <nav className="relative  border-b border-white/5 backdrop-blur-xl bg-slate-950/70 sticky top-0 z-100">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
+      <nav className="relative border-b border-white/5 backdrop-blur-xl bg-slate-950/70 sticky top-0 z-[100]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <span className="font-bold text-xl tracking-tight block">
+            <div className="hidden xs:block">
+              <span className="font-bold text-base sm:text-xl tracking-tight block leading-none">
                 Resistance<span className="text-blue-400">Terminal</span>
               </span>
-              <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] leading-none">
+              <span className="text-[8px] sm:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] leading-none mt-1">
                 Intelligence Engine
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-white/5">
+          <div className="flex items-center gap-1 sm:gap-2 bg-slate-900/80 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-white/5 overflow-x-auto no-scrollbar">
             <ViewToggle
               active={view === "trade"}
               onClick={() => setView("trade")}
               icon={Zap}
-              label="Live Trade"
+              label="Trade"
             />
             <ViewToggle
               active={view === "backtest"}
               onClick={() => setView("backtest")}
               icon={Settings2}
-              label="Backtest"
+              label="Test"
             />
             <ViewToggle
               active={view === "paper-history"}
               onClick={() => setView("paper-history")}
               icon={Database}
-              label="Paper History"
+              label="Log"
             />
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/50 border border-white/5 text-xs font-bold text-slate-400">
+          <div className="hidden md:flex items-center gap-4 shrink-0">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/50 border border-white/5 text-xs font-bold text-slate-400">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-              V2 NODE ACTIVE
+              NODE ACTIVE
             </div>
           </div>
         </div>
@@ -1616,8 +1667,9 @@ export default function App() {
                 </h1>
               </div>
 
-              <div className="flex items-center gap-8">
-                <div className="flex items-center gap-3 bg-slate-900/40 p-1.5 rounded-2xl border border-white/5">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-10">
+              <div className="w-full lg:w-auto overflow-x-auto no-scrollbar pb-2 lg:pb-0">
+                <div className="flex items-center gap-2 bg-slate-900/40 p-1.5 rounded-2xl border border-white/5 w-max">
                   {[
                     "B-BTC_USDT",
                     "B-ETH_USDT",
@@ -1629,7 +1681,7 @@ export default function App() {
                       key={p}
                       onClick={() => setPair(p)}
                       className={cn(
-                        "px-4 py-2 rounded-xl text-[10px] font-black transition-all",
+                        "px-4 py-2 rounded-xl text-[10px] font-black transition-all whitespace-nowrap",
                         pair === p
                           ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"
                           : "text-slate-500 hover:text-slate-200 hover:bg-white/5",
@@ -1641,23 +1693,25 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-6">
-                {liveBalance !== null && (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20">
-                    <Database className="w-3.5 h-3.5 text-blue-400" />
-                    <span className="text-xs font-black text-blue-400 font-mono">
-                      {liveBalance.toLocaleString()} INR
-                    </span>
-                  </div>
-                )}
-                {tickerPrice && (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs font-black text-emerald-400 font-mono">
-                      ${tickerPrice.toLocaleString()}
-                    </span>
-                  </div>
-                )}
+              <div className="flex items-center flex-wrap gap-4 w-full lg:w-auto justify-between lg:justify-end">
+                <div className="flex items-center gap-4">
+                  {liveBalance !== null && (
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                      <Database className="w-3.5 h-3.5 text-blue-400" />
+                      <span className="text-xs font-black text-blue-400 font-mono">
+                        {liveBalance.toLocaleString()} INR
+                      </span>
+                    </div>
+                  )}
+                  {tickerPrice && (
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-xs font-black text-emerald-400 font-mono">
+                        ${tickerPrice.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={() => setIsSilent(!isSilent)}
                   className={cn(
@@ -1675,6 +1729,7 @@ export default function App() {
                 </button>
               </div>
             </div>
+          </div>
 
             {/* Main Terminal Body */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -1911,7 +1966,7 @@ export default function App() {
                       {liveInterval === "D" ? "1D" : liveInterval + "M"}
                     </div>
                   </div>
-                  <div className="h-[500px] w-full bg-slate-950/50 rounded-3xl border border-white/5 overflow-hidden">
+                  <div className="h-[350px] sm:h-[500px] w-full bg-slate-950/50 rounded-[2rem] border border-white/5 overflow-hidden">
                     <LiveMarketChart
                       candles={candles}
                       trades={backtestResult?.trades || []}
@@ -1922,9 +1977,7 @@ export default function App() {
 
                 {/* Active Trade Card */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {!backtestResult ||
-                    backtestResult.trades.filter((t) => t.status === "open")
-                      .length === 0 ? (
+                  {combinedActiveTrades.length === 0 ? (
                     <div className="md:col-span-2 p-12 border-2 border-dashed border-white/5 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-600">
                       <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center mb-4">
                         <Zap className="w-8 h-8 opacity-20" />
@@ -1934,9 +1987,8 @@ export default function App() {
                       </p>
                     </div>
                   ) : (
-                    backtestResult.trades
-                      .filter((t) => t.status === "open")
-                      .slice(0, 1)
+                    combinedActiveTrades
+                      .slice(0, 2)
                       .map((trade, i) => (
                         <motion.div
                           key={i}
@@ -1985,9 +2037,13 @@ export default function App() {
                                   {trade.profit >= 0 ? "+" : ""}$
                                   {trade.profit.toFixed(2)}
                                 </p>
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                  Live P/L
-                                </p>
+                                <div className={cn(
+                                  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider mt-1",
+                                  trade.profit >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+                                )}>
+                                  <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", trade.profit >= 0 ? "bg-emerald-500" : "bg-rose-500")} />
+                                  {trade.pnlPercent?.toFixed(2)}%
+                                </div>
                               </div>
                             </div>
 
@@ -1998,24 +2054,24 @@ export default function App() {
                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">
                                   Entry Price
                                 </p>
-                                <p className="text-sm font-bold text-white font-mono">
+                                <p className="text-xs font-bold text-white font-mono">
                                   ${trade.entryPrice.toLocaleString()}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">
-                                  Stop Loss
+                                  Stop Loss {trade.trailingCount ? " (Trailed)" : ""}
                                 </p>
-                                <p className="text-sm font-bold text-rose-400 font-mono">
+                                <p className="text-xs font-bold text-rose-400 font-mono">
                                   ${trade.sl.toLocaleString()}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">
-                                  Target
+                                  Live Price
                                 </p>
-                                <p className="text-sm font-bold text-emerald-400 font-mono">
-                                  ${trade.tp?.toLocaleString() || "N/A"}
+                                <p className="text-xs font-bold text-blue-400 animate-pulse font-mono">
+                                  ${tickerPrice ? tickerPrice.toLocaleString() : '---'}
                                 </p>
                               </div>
                             </div>
@@ -2675,10 +2731,10 @@ function ResultCard({
       >
         <Icon className="w-8 h-8" />
       </div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-2">
+      <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1 md:mb-2">
         {title}
       </p>
-      <p className={cn("text-4xl font-black tracking-tighter", color)}>
+      <p className={cn("text-2xl md:text-4xl font-black tracking-tighter", color)}>
         {value}
       </p>
     </div>
@@ -2700,14 +2756,14 @@ function ViewToggle({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all",
+        "flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all whitespace-nowrap",
         active
-          ? "bg-blue-600 text-white shadow-xl shadow-blue-600/20"
-          : "text-slate-500 hover:text-slate-300",
+          ? "bg-blue-600 text-white shadow-lg sm:shadow-xl shadow-blue-600/20"
+          : "text-slate-500 hover:text-slate-300 hover:bg-white/5",
       )}
     >
-      <Icon className="w-4 h-4" />
-      {label}
+      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      <span className="hidden xs:inline">{label}</span>
     </button>
   );
 }
