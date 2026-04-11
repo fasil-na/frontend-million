@@ -3,7 +3,6 @@ import React, {
   useState,
   useMemo,
   useRef,
-  useCallback,
 } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
@@ -121,8 +120,11 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-const API_BASE_URL = `/api`;
-const SOCKET_URL = `/`;
+// const API_BASE_URL = `/api`;
+// const SOCKET_URL = `/`;
+
+const API_BASE_URL = `http://localhost:5001/api`;
+const SOCKET_URL = `http://localhost:5001`;
 
 const socket = io(SOCKET_URL, { 
   transports: ["websocket"], 
@@ -216,7 +218,9 @@ function PaperTradeHistoryView() {
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-950/40 sticky top-0 z-10">
                   <th className="px-8 py-5">Date / Time</th>
                   <th className="px-5 py-5">Pair</th>
-                  <th className="px-5 py-5">Type / Price</th>
+                  <th className="px-5 py-5">Entry / Exit</th>
+                  <th className="px-5 py-5">SL / Units</th>
+                  <th className="px-5 py-5 text-center">Trailing</th>
                   <th className="px-5 py-5 text-right">Profit</th>
                   <th className="px-10 py-5 text-center">Status</th>
                   <th className="px-8 py-5 text-right">Action</th>
@@ -234,13 +238,35 @@ function PaperTradeHistoryView() {
                       <div className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{t.type || 'auto'}</div>
                     </td>
                     <td className="px-5 py-4">
-                      <div className={cn("text-xs font-black uppercase", t.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>{t.direction}</div>
-                      <div className="text-[10px] text-slate-400">${t.entryPrice?.toFixed(2)}</div>
+                      <div className={cn("text-xs font-black uppercase", t.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
+                        {t.direction} @ ${t.entryPrice?.toFixed(2)}
+                      </div>
+                      {t.exitPrice && (
+                        <div className="text-[10px] text-slate-400">
+                          Exited @ ${t.exitPrice?.toFixed(2)}
+                          <span className="ml-2 opacity-50 italic">({t.exitReason || 'Target Hit'})</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl?.toFixed(2) || 'N/A'}</div>
+                      <div className="text-[10px] text-slate-500">Units: {t.units?.toFixed(4) || '0'}</div>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                        <Zap className="w-3 h-3 text-blue-400" />
+                        <span className="text-xs font-black text-blue-400">{t.trailingCount || 0}</span>
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <span className={cn("text-sm font-black", t.profit >= 0 ? "text-emerald-400" : "text-rose-400")}>
                         {t.profit >= 0 ? '+' : ''}{t.profit?.toFixed(2)}
                       </span>
+                      {t.pnlPercent && (
+                        <div className={cn("text-[10px] font-bold", t.pnlPercent >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
+                          {t.pnlPercent.toFixed(2)}%
+                        </div>
+                      )}
                     </td>
                     <td className="px-10 py-4 text-center">
                       <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest", t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-slate-800 text-slate-400 border border-white/5')}>
@@ -268,27 +294,13 @@ export default function App() {
     "trade",
   );
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [pair, setPair] = useState(
-    () => localStorage.getItem("trade_pair") || "B-BTC_USDT",
-  );
-  const [selectedStrategyId, setSelectedStrategyId] = useState(
-    () => localStorage.getItem("trade_strategy") || "opening-breakout",
-  );
-  const [initialCapital, setInitialCapital] = useState(
-    () => Number(localStorage.getItem("trade_capital")) || 5,
-  );
-  const [liveInterval, setLiveInterval] = useState(
-    () => localStorage.getItem("trade_interval") || "60",
-  );
-  const [isLiveMonitoring, setIsLiveMonitoring] = useState(
-    () => localStorage.getItem("trade_live_monitor") === "true"
-  );
-  const [isLiveTrading, setIsLiveTrading] = useState(
-    () => localStorage.getItem("trade_live_trading") === "true"
-  );
-  const [isPaperTrading, setIsPaperTrading] = useState(
-    () => localStorage.getItem("trade_paper_trading") === "true"
-  );
+  const [pair, setPair] = useState("B-BTC_USDT");
+  const [selectedStrategyId, setSelectedStrategyId] = useState("opening-breakout");
+  const [initialCapital, setInitialCapital] = useState(5);
+  const [liveInterval, setLiveInterval] = useState("60");
+  const [isLiveMonitoring, setIsLiveMonitoring] = useState(false);
+  const [isLiveTrading, setIsLiveTrading] = useState(false);
+  const [isPaperTrading, setIsPaperTrading] = useState(true);
   const [tickerPrice, setTickerPrice] = useState<number | null>(null);
 
   // Common Backtest State (Restored)
@@ -311,37 +323,30 @@ export default function App() {
   };
 
   useEffect(() => {
-    localStorage.setItem("trade_pair", pair);
     updateBackendSettings({ pair });
   }, [pair]);
 
   useEffect(() => {
-    localStorage.setItem("trade_strategy", selectedStrategyId);
     updateBackendSettings({ selectedStrategyId });
   }, [selectedStrategyId]);
 
   useEffect(() => {
-    localStorage.setItem("trade_capital", initialCapital.toString());
     updateBackendSettings({ initialCapital });
   }, [initialCapital]);
 
   useEffect(() => {
-    localStorage.setItem("trade_interval", liveInterval);
     updateBackendSettings({ timeInterval: liveInterval });
   }, [liveInterval]);
 
   useEffect(() => {
-    localStorage.setItem("trade_live_monitor", isLiveMonitoring.toString());
     updateBackendSettings({ isLiveMonitoring });
   }, [isLiveMonitoring]);
 
   useEffect(() => {
-    localStorage.setItem("trade_live_trading", isLiveTrading.toString());
     updateBackendSettings({ isLiveTrading });
   }, [isLiveTrading]);
 
   useEffect(() => {
-    localStorage.setItem("trade_paper_trading", isPaperTrading.toString());
     updateBackendSettings({ isPaperTrading });
   }, [isPaperTrading]);
 
@@ -372,13 +377,12 @@ export default function App() {
   const [paperTrades, setPaperTrades] = useState<Trade[]>([]);
 
   // Audio Alert
-  const playAlert = useCallback(() => {
-    if (isSilent) return;
-    const audio = new Audio("/cash_register.mp3");
-    audio.play().catch((err) => console.error("Audio playback failed:", err));
-  }, [isSilent]);
+  // const playAlert = useCallback(() => {
+  //   if (isSilent) return;
+  //   const audio = new Audio("/cash_register.mp3");
+  //   audio.play().catch((err) => console.error("Audio playback failed:", err));
+  // }, [isSilent]);
 
-  const lastAlertedTradeRef = useRef<string | null>(null);
 
   const fetchStrategies = async () => {
     try {
@@ -592,76 +596,9 @@ export default function App() {
       };
       fetchInitialBalance();
 
-      // Poll candles every 10 seconds (heavy call)
+      // Poll candles regularly to refresh chart
       candleIntervalId = window.setInterval(() => {
         fetchMarketData();
-
-        const runLiveStrategy = async () => {
-          if (isBankruptcy) return; // BANKRUPTCY CHECK
-
-          try {
-            const response = await axios.post<BacktestResponse>(
-              `${API_BASE_URL}/backtest`,
-              {
-                pair,
-                resolution: liveInterval,
-                strategyId: selectedStrategyId,
-                capitalPerTrade: (liveBalance !== null) ? liveBalance : initialCapital, // COMPOUNDING
-                isLive: true,
-              },
-            );
-            setBacktestResult(response.data);
-
-            // Check for new trades to alert/execute
-            if (response.data.trades.length > 0) {
-              const latestTrade = response.data.trades[0];
-              if (latestTrade.status === "open") {
-                const tradeId = `${latestTrade.entryTime}-${latestTrade.direction}`;
-                if (lastAlertedTradeRef.current !== tradeId) {
-                  // Play sound if this isn't the very first detection after refresh
-                  if (lastAlertedTradeRef.current !== null) {
-                    playAlert();
-                  }
-                  lastAlertedTradeRef.current = tradeId;
-
-                  // Paper Trading Execution
-                  if (isPaperTrading) {
-                    axios.post(`${API_BASE_URL}/paper-trade`, {
-                      trade: latestTrade,
-                      pair: pair
-                    })
-                      .then(() => fetchPaperTrades())
-                      .catch(err => console.error("Paper trade record failed:", err));
-                  }
-
-                  // ONLY execute on exchange if Auto-Trade is ON
-                  if (isLiveTrading) {
-                    // BEFORE Execution - check bankruptcy again
-                    if (((liveBalance !== null ? liveBalance : initialCapital)) <= 0) {
-                      setIsBankruptcy(true);
-                      alert("TERMINATED: Live strategy stopped due to zero/negative balance.");
-                      return;
-                    }
-
-                    await axios.post(`${API_BASE_URL}/trade/execute`, {
-                      side: latestTrade.direction === "buy" ? "buy" : "sell",
-                      pair: pair.replace("B-", "").replace("_", ""),
-                      price: latestTrade.entryPrice,
-                      capital: liveBalance !== null ? liveBalance : initialCapital, // COMPOUNDING
-                    });
-
-                    // After execution, refresh balance
-                    fetchInitialBalance();
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.error("Live strategy update failed:", err);
-          }
-        };
-        runLiveStrategy();
-        fetchPaperTrades();
       }, 60000);
 
     }
@@ -1127,7 +1064,7 @@ export default function App() {
                       </div>
 
                       <button
-                        onClick={runBacktest}
+                        onClick={()=>runBacktest()}
                         disabled={isBacktesting || isOptimizing}
                         className={cn(
                           "w-full py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:bg-slate-800",
@@ -2325,7 +2262,7 @@ function LiveMarketChart({
     }
 
     // Add SL/TP Lines for the latest active trade
-    const activeTrade = trades.find((t) => t.status === "open");
+    const activeTrade = trades?.find((t) => t.status === "open");
     if (candleSeriesRef.current) {
       // Clear existing lines
       if (slLineRef.current) {
