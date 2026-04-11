@@ -116,10 +116,10 @@ interface Strategy {
 
 
 
-// const API_BASE_URL = "http://localhost:5001/api";
-const API_BASE_URL = "/api";
-// const SOCKET_URL = "http://localhost:5001";
-const SOCKET_URL = "/";
+const API_BASE_URL = "http://localhost:5001/api";
+// const API_BASE_URL = "/api";
+const SOCKET_URL = "http://localhost:5001";
+// const SOCKET_URL = "/";
 const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling"] });
 
 function PaperTradeHistoryView() {
@@ -538,7 +538,6 @@ export default function App() {
 
       socket.on("price-change", handlePriceChange);
       socket.on("candlestick", (data) => {
-        console.log(data,'data=====')
         if (data && data.time) {
           setCandles((prev) => {
             // Update existing candle or prepend new one
