@@ -118,11 +118,19 @@ interface Strategy {
 
 
 
-// const API_BASE_URL = "http://localhost:5001/api";
-const API_BASE_URL = "/api";
-// const SOCKET_URL = "http://localhost:5001";
-const SOCKET_URL = "/";
-const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling"] });
+// Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
+const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
+
+const API_BASE_URL = `http://${SERVER_HOST}/api`;
+const SOCKET_URL = `http://${SERVER_HOST}`;
+
+const socket = io(SOCKET_URL, { 
+  transports: ["websocket"], 
+  upgrade: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000,
+});
 
 function PaperTradeHistoryView() {
   const [trades, setTrades] = useState<any[]>([]);
@@ -1673,9 +1681,7 @@ export default function App() {
                   {[
                     "B-BTC_USDT",
                     "B-ETH_USDT",
-                    "B-DOGE_USDT",
-                    "B-SHIB_USDT",
-                    "B-XAU_USDT",
+                  
                   ].map((p) => (
                     <button
                       key={p}
@@ -1969,7 +1975,7 @@ export default function App() {
                   <div className="h-[350px] sm:h-[500px] w-full bg-slate-950/50 rounded-[2rem] border border-white/5 overflow-hidden">
                     <LiveMarketChart
                       candles={candles}
-                      trades={backtestResult?.trades || []}
+                      trades={[...(backtestResult?.trades || []), ...combinedActiveTrades]}
                       selectedTrade={selectedTradeForChart}
                     />
                   </div>
@@ -2265,8 +2271,6 @@ function LiveMarketChart({
 
     // Add markers for trades
     const markers: any[] = [];
-
-    // If a trade is selected from the log, prioritize its markers
     const tradesToMark = selectedTrade ? [selectedTrade] : trades;
 
     tradesToMark.forEach((trade) => {
