@@ -128,6 +128,9 @@ interface Strategy {
 const API_BASE_URL = `/api`;
 const SOCKET_URL = `/`;
 
+// const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
+// const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
+
 // const API_BASE_URL = `http://localhost:5001/api`;
 // const SOCKET_URL = `http://localhost:5001`;
 
@@ -232,7 +235,7 @@ function PaperTradeHistoryView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {[...trades].sort((a, b) => new Date(b.recordedAt || b.entryTime).getTime() - new Date(a.recordedAt || a.entryTime).getTime()).map(t => (
+                {Array.isArray(trades) && [...trades].sort((a, b) => new Date(b.recordedAt || b.entryTime).getTime() - new Date(a.recordedAt || a.entryTime).getTime()).map(t => (
                   <tr key={t.entryTime} className="bg-slate-900/20 hover:bg-slate-800/40 transition-colors group">
                     <td className="px-8 py-4">
                       <div className="text-sm font-bold text-white">{dayjs(t.entryTime).format("MMM D, YYYY")}</div>
@@ -501,6 +504,55 @@ export default function App() {
     }
   };
 
+  const handleManualTrade = async (side: "buy" | "sell") => {
+    console.log(`[ManualTrade] 🚀 Initiating manual ${side} order...`);
+    console.log(`[ManualTrade] 📍 Pair: ${pair}, Price: ${tickerPrice}, Capital: ${initialCapital}`);
+
+    if (!tickerPrice) {
+      console.warn("[ManualTrade] ⚠️ Ticker price is missing, aborting.");
+      return;
+    }
+
+    try {
+      const payload = {
+        side,
+        pair: pair.replace("B-", "").replace("_", ""),
+        price: tickerPrice,
+        capital: initialCapital,
+      };
+
+      console.log(`[ManualTrade] 📤 Sending POST request to ${API_BASE_URL}/trade/execute`, payload);
+
+      const res = await axios.post(`${API_BASE_URL}/trade/execute`, payload);
+
+      console.log(`[ManualTrade] ✅ Order Response:`, res.data);
+      alert(`Manual ${side === "buy" ? "Buy" : "Sell/Close"} Order: ${JSON.stringify(res.data)}`);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.response?.data?.error || err.message;
+      console.error(`[ManualTrade] ❌ Manual ${side} Failed:`, msg, err);
+      alert(`Manual ${side === "buy" ? "Buy" : "Sell"} Failed: ${msg}`);
+    }
+  };
+
+  const handleCheckBalance = async () => {
+    console.log("[Balance] 💰 Checking account balances...");
+    try {
+      // In your previous code you used /user/balances, but based on backend routes it should be /trade/balances
+      console.log(`[Balance] 📤 Sending POST request to ${API_BASE_URL}/trade/balances`);
+      const res = await axios.post(`${API_BASE_URL}/trade/balances`);
+      console.log("[Balance] ✅ Balance Response:", res.data);
+
+      const inrBalance = res.data.find((b: any) => b.currency === "INR");
+      const dogeBalance = res.data.find((b: any) => b.currency === "DOGE");
+
+      alert(`Balances:\nINR: ${inrBalance?.balance || 0}\nDOGE: ${dogeBalance?.balance || 0}\n\nFull Response: ${JSON.stringify(res.data)}`);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.response?.data?.error || err.message;
+      console.error("[Balance] ❌ Balance Check Failed:", msg, err);
+      alert(`Balance Check Failed: ${msg}`);
+    }
+  };
+
   const handleOptimize = async () => {
     try {
       setIsOptimizing(true);
@@ -589,7 +641,7 @@ export default function App() {
       // Fetch live balance for compounding/bankruptcy
       const fetchInitialBalance = async () => {
         try {
-          const res = await axios.post(`${API_BASE_URL}/user/balances`);
+          const res = await axios.post(`${API_BASE_URL}/trade/balances`);
           const inrBalance = res.data.find((b: any) => b.currency === "INR");
           if (inrBalance) {
             setLiveBalance(parseFloat(inrBalance.balance));
@@ -646,8 +698,8 @@ export default function App() {
   }, [backtestResult]);
 
   const combinedActiveTrades = useMemo(() => {
-    const backtestOpen = backtestResult?.trades.filter(t => t.status === 'open') || [];
-    const paperOpen = paperTrades.filter(t => t.status === 'open') || [];
+    const backtestOpen = Array.isArray(backtestResult?.trades) ? backtestResult.trades.filter(t => t?.status === 'open') : [];
+    const paperOpen = Array.isArray(paperTrades) ? paperTrades.filter(t => t?.status === 'open') : [];
 
     // De-duplicate by entryTime to avoid double showing
     const seen = new Set();
@@ -789,7 +841,7 @@ export default function App() {
                 <div className="space-y-6">
                   {/* Strategy Selection (Common) */}
                   <div className="flex bg-slate-950/50 p-1 rounded-2xl border border-white/5 mb-4">
-                    {strategies.map((s) => (
+                    {Array.isArray(strategies) && strategies.map((s) => (
                       <button
                         key={s.id}
                         onClick={() => {
@@ -981,85 +1033,19 @@ export default function App() {
 
                             <div className="grid grid-cols-2 gap-4">
                               <button
-                                onClick={async () => {
-                                  if (!tickerPrice) return;
-                                  try {
-                                    const res = await axios.post(
-                                      `${API_BASE_URL}/trade/execute`,
-                                      {
-                                        side: "buy",
-                                        pair: pair
-                                          .replace("B-", "")
-                                          .replace("_", ""),
-                                        price: tickerPrice,
-                                        capital: initialCapital,
-                                      },
-                                    );
-                                    alert(
-                                      `Manual Buy Order: ${JSON.stringify(res.data)}`,
-                                    );
-                                  } catch (err: any) {
-                                    const msg =
-                                      err.response?.data?.message ||
-                                      err.message;
-                                    alert(`Manual Buy Failed: ${msg}`);
-                                  }
-                                }}
+                                onClick={() => handleManualTrade("buy")}
                                 className="py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-emerald-600/20"
                               >
                                 Manual Buy
                               </button>
                               <button
-                                onClick={async () => {
-                                  if (!tickerPrice) return;
-                                  try {
-                                    const res = await axios.post(
-                                      `${API_BASE_URL}/trade/execute`,
-                                      {
-                                        side: "sell",
-                                        pair: pair
-                                          .replace("B-", "")
-                                          .replace("_", ""),
-                                        price: tickerPrice,
-                                        capital: initialCapital,
-                                      },
-                                    );
-                                    alert(
-                                      `Manual Sell/Close Order: ${JSON.stringify(res.data)}`,
-                                    );
-                                  } catch (err: any) {
-                                    const msg =
-                                      err.response?.data?.message ||
-                                      err.message;
-                                    alert(`Manual Sell Failed: ${msg}`);
-                                  }
-                                }}
+                                onClick={() => handleManualTrade("sell")}
                                 className="py-4 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-rose-600/20"
                               >
                                 Manual Sell
                               </button>
                               <button
-                                onClick={async () => {
-                                  try {
-                                    const res = await axios.post(
-                                      `${API_BASE_URL}/user/balances`,
-                                    );
-                                    const inrBalance = res.data.find(
-                                      (b: any) => b.currency === "INR",
-                                    );
-                                    const dogeBalance = res.data.find(
-                                      (b: any) => b.currency === "DOGE",
-                                    );
-                                    alert(
-                                      `Balances:\nINR: ${inrBalance?.balance || 0}\nDOGE: ${dogeBalance?.balance || 0}\n\nFull Response: ${JSON.stringify(res.data)}`,
-                                    );
-                                  } catch (err: any) {
-                                    const msg =
-                                      err.response?.data?.message ||
-                                      err.message;
-                                    alert(`Balance Check Failed: ${msg}`);
-                                  }
-                                }}
+                                onClick={handleCheckBalance}
                                 className="col-span-2 py-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 border border-white/5"
                               >
                                 Check Balance
@@ -1747,7 +1733,7 @@ export default function App() {
                           }
                           className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none"
                         >
-                          {strategies.map((s) => (
+                          {Array.isArray(strategies) && strategies.map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
                             </option>
