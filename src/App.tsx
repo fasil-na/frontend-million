@@ -116,16 +116,20 @@ interface Strategy {
 
 
 
-// const API_BASE_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
-// const SOCKET_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-const API_BASE_URL = window.location.hostname === "localhost" ? "http://localhost:5001/api" : "/api";
-const SOCKET_URL = window.location.hostname === "localhost" ? "http://localhost:5001" : "/";
+// const API_BASE_URL = window.location.hostname === "localhost" ? "http://localhost:5001/api" : "/api";
+// const SOCKET_URL = window.location.hostname === "localhost" ? "http://localhost:5001" : "/";
 // const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling", "websocket"] });
 
 
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
+
+const API_BASE_URL = `/api`;
+const SOCKET_URL = `/`;
+
+// const API_BASE_URL = `http://localhost:5001/api`;
+// const SOCKET_URL = `http://localhost:5001`;
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket"],
@@ -568,7 +572,6 @@ export default function App() {
         fetchPaperTrades();
       });
       socket.on("candlestick", (data) => {
-        console.log(data, 'data=====')
         if (data && data.time) {
           setCandles((prev) => {
             // Update existing candle or prepend new one
