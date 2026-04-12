@@ -116,11 +116,9 @@ interface Strategy {
 
 
 
-// const API_BASE_URL = "http://localhost:5001/api";
-const API_BASE_URL = "/api";
-// const SOCKET_URL = "http://localhost:5001";
-const SOCKET_URL = "/";
-const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling"] });
+const API_BASE_URL = window.location.hostname === "localhost" ? "http://localhost:5001/api" : "/api";
+const SOCKET_URL = window.location.hostname === "localhost" ? "http://localhost:5001" : "/";
+const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling", "websocket"] });
 
 function PaperTradeHistoryView() {
   const [trades, setTrades] = useState<any[]>([]);
@@ -538,7 +536,7 @@ export default function App() {
 
       socket.on("price-change", handlePriceChange);
       socket.on("candlestick", (data) => {
-        console.log(data,'data=====')
+        console.log(data, 'data=====')
         if (data && data.time) {
           setCandles((prev) => {
             // Update existing candle or prepend new one
@@ -962,19 +960,20 @@ export default function App() {
                           </button>
                         </div>
 
-                        {isLiveTrading && (
+                        {(isLiveTrading || isPaperTrading) && (
                           <motion.div
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
                             className="space-y-4"
                           >
-                            <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl space-y-2">
-                              <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
-                                Live Test Mode Active
+                            <div className={cn("p-4 border rounded-2xl space-y-2", isLiveTrading ? "bg-emerald-500/5 border-emerald-500/10" : "bg-indigo-500/5 border-indigo-500/10")}>
+                              <p className={cn("text-[10px] font-black uppercase tracking-widest", isLiveTrading ? "text-emerald-400" : "text-indigo-400")}>
+                                {isLiveTrading ? "Live Auto-Trade Active" : "Paper Trade Mode Active"}
                               </p>
                               <p className="text-[10px] font-bold text-slate-500 leading-relaxed">
-                                Trading with 100 INR per position. Ensure your
-                                backend .env is configured with API credentials.
+                                {isLiveTrading
+                                  ? "Trading with real funds. Ensure your backend .env is configured with API credentials."
+                                  : "Simulated trading. Records will be saved to your paper history log."}
                               </p>
                             </div>
 
