@@ -508,16 +508,16 @@ export default function App() {
     console.log(`[ManualTrade] 🚀 Initiating manual ${side} order...`);
     console.log(`[ManualTrade] 📍 Pair: ${pair}, Price: ${tickerPrice}, Capital: ${initialCapital}`);
 
-    if (!tickerPrice) {
-      console.warn("[ManualTrade] ⚠️ Ticker price is missing, aborting.");
-      return;
-    }
+    // if (!tickerPrice) {
+    //   console.warn("[ManualTrade] ⚠️ Ticker price is missing, aborting.");
+    //   return;
+    // }
 
     try {
       const payload = {
         side,
         pair: pair.replace("B-", "").replace("_", ""),
-        price: tickerPrice,
+        price: 71614,
         capital: initialCapital,
       };
 
@@ -601,7 +601,6 @@ export default function App() {
       socket.emit("subscribe", pair);
 
       const handlePriceChange = (data: any) => {
-        console.log(data,'data-----frontend handlePriceChange')
         const rawPrice = data.p || data.price || data.last_price;
         if (rawPrice && (!data.m || data.m === pair)) {
           const price = parseFloat(rawPrice);
