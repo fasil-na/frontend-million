@@ -3,7 +3,6 @@ import React, {
   useState,
   useMemo,
   useRef,
-  useCallback,
 } from "react";
 import axios from "axios";
 import dayjs from "dayjs";
@@ -68,6 +67,8 @@ interface Trade {
   units?: number;
   sl: number;
   tp?: number;
+  pnlPercent?: number;
+  trailingCount?: number;
 }
 
 interface BacktestResponse {
@@ -118,7 +119,19 @@ interface Strategy {
 
 const API_BASE_URL = window.location.hostname === "localhost" ? "http://localhost:5001/api" : "/api";
 const SOCKET_URL = window.location.hostname === "localhost" ? "http://localhost:5001" : "/";
-const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling", "websocket"] });
+// const socket = io(SOCKET_URL, { autoConnect: false, transports: ["polling", "websocket"] });
+
+
+// Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
+// const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
+
+const socket = io(SOCKET_URL, {
+  transports: ["websocket"],
+  upgrade: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000,
+});
 
 function PaperTradeHistoryView() {
   const [trades, setTrades] = useState<any[]>([]);
@@ -193,7 +206,7 @@ function PaperTradeHistoryView() {
             Recorded Trades List ({trades.length})
           </h3>
         </div>
-        <div className="max-h-[600px] overflow-y-auto">
+        <div className="max-h-[600px] overflow-auto no-scrollbar">
           {trades.length === 0 ? (
             <div className="p-12 text-center text-slate-500 font-bold uppercase tracking-widest text-xs">
               No Paper Trades Recorded Yet
@@ -204,7 +217,9 @@ function PaperTradeHistoryView() {
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-950/40 sticky top-0 z-10">
                   <th className="px-8 py-5">Date / Time</th>
                   <th className="px-5 py-5">Pair</th>
-                  <th className="px-5 py-5">Type / Price</th>
+                  <th className="px-5 py-5">Entry / Exit</th>
+                  <th className="px-5 py-5">SL / Units</th>
+                  <th className="px-5 py-5 text-center">Trailing</th>
                   <th className="px-5 py-5 text-right">Profit</th>
                   <th className="px-10 py-5 text-center">Status</th>
                   <th className="px-8 py-5 text-right">Action</th>
@@ -222,13 +237,35 @@ function PaperTradeHistoryView() {
                       <div className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{t.type || 'auto'}</div>
                     </td>
                     <td className="px-5 py-4">
-                      <div className={cn("text-xs font-black uppercase", t.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>{t.direction}</div>
-                      <div className="text-[10px] text-slate-400">${t.entryPrice?.toFixed(2)}</div>
+                      <div className={cn("text-xs font-black uppercase", t.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
+                        {t.direction} @ ${t.entryPrice?.toFixed(2)}
+                      </div>
+                      {t.exitPrice && (
+                        <div className="text-[10px] text-slate-400">
+                          Exited @ ${t.exitPrice?.toFixed(2)}
+                          <span className="ml-2 opacity-50 italic">({t.exitReason || 'Target Hit'})</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl?.toFixed(2) || 'N/A'}</div>
+                      <div className="text-[10px] text-slate-500">Units: {t.units?.toFixed(4) || '0'}</div>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                        <Zap className="w-3 h-3 text-blue-400" />
+                        <span className="text-xs font-black text-blue-400">{t.trailingCount || 0}</span>
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <span className={cn("text-sm font-black", t.profit >= 0 ? "text-emerald-400" : "text-rose-400")}>
                         {t.profit >= 0 ? '+' : ''}{t.profit?.toFixed(2)}
                       </span>
+                      {t.pnlPercent && (
+                        <div className={cn("text-[10px] font-bold", t.pnlPercent >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
+                          {t.pnlPercent.toFixed(2)}%
+                        </div>
+                      )}
                     </td>
                     <td className="px-10 py-4 text-center">
                       <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest", t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-slate-800 text-slate-400 border border-white/5')}>
@@ -256,27 +293,13 @@ export default function App() {
     "trade",
   );
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [pair, setPair] = useState(
-    () => localStorage.getItem("trade_pair") || "B-BTC_USDT",
-  );
-  const [selectedStrategyId, setSelectedStrategyId] = useState(
-    () => localStorage.getItem("trade_strategy") || "opening-breakout",
-  );
-  const [initialCapital, setInitialCapital] = useState(
-    () => Number(localStorage.getItem("trade_capital")) || 5,
-  );
-  const [liveInterval, setLiveInterval] = useState(
-    () => localStorage.getItem("trade_interval") || "60",
-  );
-  const [isLiveMonitoring, setIsLiveMonitoring] = useState(
-    () => localStorage.getItem("trade_live_monitor") === "true"
-  );
-  const [isLiveTrading, setIsLiveTrading] = useState(
-    () => localStorage.getItem("trade_live_trading") === "true"
-  );
-  const [isPaperTrading, setIsPaperTrading] = useState(
-    () => localStorage.getItem("trade_paper_trading") === "true"
-  );
+  const [pair, setPair] = useState("B-BTC_USDT");
+  const [selectedStrategyId, setSelectedStrategyId] = useState("opening-breakout");
+  const [initialCapital, setInitialCapital] = useState(5);
+  const [liveInterval, setLiveInterval] = useState("60");
+  const [isLiveMonitoring, setIsLiveMonitoring] = useState(false);
+  const [isLiveTrading, setIsLiveTrading] = useState(false);
+  const [isPaperTrading, setIsPaperTrading] = useState(true);
   const [tickerPrice, setTickerPrice] = useState<number | null>(null);
 
   // Common Backtest State (Restored)
@@ -299,37 +322,30 @@ export default function App() {
   };
 
   useEffect(() => {
-    localStorage.setItem("trade_pair", pair);
     updateBackendSettings({ pair });
   }, [pair]);
 
   useEffect(() => {
-    localStorage.setItem("trade_strategy", selectedStrategyId);
     updateBackendSettings({ selectedStrategyId });
   }, [selectedStrategyId]);
 
   useEffect(() => {
-    localStorage.setItem("trade_capital", initialCapital.toString());
     updateBackendSettings({ initialCapital });
   }, [initialCapital]);
 
   useEffect(() => {
-    localStorage.setItem("trade_interval", liveInterval);
     updateBackendSettings({ timeInterval: liveInterval });
   }, [liveInterval]);
 
   useEffect(() => {
-    localStorage.setItem("trade_live_monitor", isLiveMonitoring.toString());
     updateBackendSettings({ isLiveMonitoring });
   }, [isLiveMonitoring]);
 
   useEffect(() => {
-    localStorage.setItem("trade_live_trading", isLiveTrading.toString());
     updateBackendSettings({ isLiveTrading });
   }, [isLiveTrading]);
 
   useEffect(() => {
-    localStorage.setItem("trade_paper_trading", isPaperTrading.toString());
     updateBackendSettings({ isPaperTrading });
   }, [isPaperTrading]);
 
@@ -357,15 +373,15 @@ export default function App() {
   const [configTab, setConfigTab] = useState<"manual" | "optimize">("manual");
   const [startYear, setStartYear] = useState(new Date().getFullYear() - 3);
   const [isSilent, setIsSilent] = useState(false);
+  const [paperTrades, setPaperTrades] = useState<Trade[]>([]);
 
   // Audio Alert
-  const playAlert = useCallback(() => {
-    if (isSilent) return;
-    const audio = new Audio("/cash_register.mp3");
-    audio.play().catch((err) => console.error("Audio playback failed:", err));
-  }, [isSilent]);
+  // const playAlert = useCallback(() => {
+  //   if (isSilent) return;
+  //   const audio = new Audio("/cash_register.mp3");
+  //   audio.play().catch((err) => console.error("Audio playback failed:", err));
+  // }, [isSilent]);
 
-  const lastAlertedTradeRef = useRef<string | null>(null);
 
   const fetchStrategies = async () => {
     try {
@@ -400,9 +416,19 @@ export default function App() {
     }
   };
 
+  const fetchPaperTrades = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/paper-trades`);
+      setPaperTrades(data);
+    } catch (err) {
+      console.error("Failed to fetch paper trades", err);
+    }
+  };
+
   useEffect(() => {
     fetchStrategies();
     fetchSettings();
+    fetchPaperTrades();
   }, []);
   const fetchMarketData = async () => {
     try {
@@ -535,8 +561,15 @@ export default function App() {
       };
 
       socket.on("price-change", handlePriceChange);
+      socket.on("paper-trade-update", () => {
+        console.log("Paper trade updated on backend, refreshing...");
+        fetchPaperTrades();
+      });
       socket.on("candlestick", (data) => {
+<<<<<<< HEAD
         console.log(data, 'data=====')
+=======
+>>>>>>> 1c64d4aaf1c47892663da0c90cffa4084904f09c
         if (data && data.time) {
           setCandles((prev) => {
             // Update existing candle or prepend new one
@@ -566,73 +599,9 @@ export default function App() {
       };
       fetchInitialBalance();
 
-      // Poll candles every 10 seconds (heavy call)
+      // Poll candles regularly to refresh chart
       candleIntervalId = window.setInterval(() => {
         fetchMarketData();
-
-        const runLiveStrategy = async () => {
-          if (isBankruptcy) return; // BANKRUPTCY CHECK
-
-          try {
-            const response = await axios.post<BacktestResponse>(
-              `${API_BASE_URL}/backtest`,
-              {
-                pair,
-                resolution: liveInterval,
-                strategyId: selectedStrategyId,
-                capitalPerTrade: (liveBalance !== null) ? liveBalance : initialCapital, // COMPOUNDING
-                isLive: true,
-              },
-            );
-            setBacktestResult(response.data);
-
-            // Check for new trades to alert/execute
-            if (response.data.trades.length > 0) {
-              const latestTrade = response.data.trades[0];
-              if (latestTrade.status === "open") {
-                const tradeId = `${latestTrade.entryTime}-${latestTrade.direction}`;
-                if (lastAlertedTradeRef.current !== tradeId) {
-                  // Play sound if this isn't the very first detection after refresh
-                  if (lastAlertedTradeRef.current !== null) {
-                    playAlert();
-                  }
-                  lastAlertedTradeRef.current = tradeId;
-
-                  // Paper Trading Execution
-                  if (isPaperTrading) {
-                    axios.post(`${API_BASE_URL}/paper-trade`, {
-                      trade: latestTrade,
-                      pair: pair
-                    }).catch(err => console.error("Paper trade record failed:", err));
-                  }
-
-                  // ONLY execute on exchange if Auto-Trade is ON
-                  if (isLiveTrading) {
-                    // BEFORE Execution - check bankruptcy again
-                    if (((liveBalance !== null ? liveBalance : initialCapital)) <= 0) {
-                      setIsBankruptcy(true);
-                      alert("TERMINATED: Live strategy stopped due to zero/negative balance.");
-                      return;
-                    }
-
-                    await axios.post(`${API_BASE_URL}/trade/execute`, {
-                      side: latestTrade.direction === "buy" ? "buy" : "sell",
-                      pair: pair.replace("B-", "").replace("_", ""),
-                      price: latestTrade.entryPrice,
-                      capital: liveBalance !== null ? liveBalance : initialCapital, // COMPOUNDING
-                    });
-
-                    // After execution, refresh balance
-                    fetchInitialBalance();
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.error("Live strategy update failed:", err);
-          }
-        };
-        runLiveStrategy();
       }, 60000);
 
     }
@@ -674,6 +643,37 @@ export default function App() {
     );
   }, [backtestResult]);
 
+  const combinedActiveTrades = useMemo(() => {
+    const backtestOpen = backtestResult?.trades.filter(t => t.status === 'open') || [];
+    const paperOpen = paperTrades.filter(t => t.status === 'open') || [];
+
+    // De-duplicate by entryTime to avoid double showing
+    const seen = new Set();
+    const combined: Trade[] = [];
+
+    [...paperOpen, ...backtestOpen].forEach(t => {
+      const key = `${t.entryTime}-${t.direction}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const trade = { ...t };
+        // Recalculate profit if ticker price is available for open positions
+        if (trade.status === 'open' && tickerPrice) {
+          const diff = trade.direction === 'buy' ? (tickerPrice - trade.entryPrice) : (trade.entryPrice - tickerPrice);
+          // If units not present, estimate from current capital setting
+          const currentLeverage = leverage || 1;
+          const units = trade.units || (initialCapital * currentLeverage / trade.entryPrice);
+          trade.profit = diff * units;
+
+          const margin = (units * trade.entryPrice) / currentLeverage;
+          trade.pnlPercent = (trade.profit / margin) * 100;
+        }
+        combined.push(trade);
+      }
+    });
+
+    return combined;
+  }, [backtestResult, paperTrades, tickerPrice, initialCapital]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30">
       {/* Background decoration */}
@@ -693,47 +693,47 @@ export default function App() {
         <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-indigo-600/10 blur-[120px]" />
       </div>
 
-      <nav className="relative  border-b border-white/5 backdrop-blur-xl bg-slate-950/70 sticky top-0 z-100">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
+      <nav className="relative border-b border-white/5 backdrop-blur-xl bg-slate-950/70 sticky top-0 z-[100]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <span className="font-bold text-xl tracking-tight block">
+            <div className="hidden xs:block">
+              <span className="font-bold text-base sm:text-xl tracking-tight block leading-none">
                 Resistance<span className="text-blue-400">Terminal</span>
               </span>
-              <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] leading-none">
+              <span className="text-[8px] sm:text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] leading-none mt-1">
                 Intelligence Engine
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-white/5">
+          <div className="flex items-center gap-1 sm:gap-2 bg-slate-900/80 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-white/5 overflow-x-auto no-scrollbar">
             <ViewToggle
               active={view === "trade"}
               onClick={() => setView("trade")}
               icon={Zap}
-              label="Live Trade"
+              label="Trade"
             />
             <ViewToggle
               active={view === "backtest"}
               onClick={() => setView("backtest")}
               icon={Settings2}
-              label="Backtest"
+              label="Test"
             />
             <ViewToggle
               active={view === "paper-history"}
               onClick={() => setView("paper-history")}
               icon={Database}
-              label="Paper History"
+              label="Log"
             />
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/50 border border-white/5 text-xs font-bold text-slate-400">
+          <div className="hidden md:flex items-center gap-4 shrink-0">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/50 border border-white/5 text-xs font-bold text-slate-400">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-              V2 NODE ACTIVE
+              NODE ACTIVE
             </div>
           </div>
         </div>
@@ -1068,7 +1068,7 @@ export default function App() {
                       </div>
 
                       <button
-                        onClick={runBacktest}
+                        onClick={() => runBacktest()}
                         disabled={isBacktesting || isOptimizing}
                         className={cn(
                           "w-full py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:bg-slate-800",
@@ -1616,63 +1616,65 @@ export default function App() {
                 </h1>
               </div>
 
-              <div className="flex items-center gap-8">
-                <div className="flex items-center gap-3 bg-slate-900/40 p-1.5 rounded-2xl border border-white/5">
-                  {[
-                    "B-BTC_USDT",
-                    "B-ETH_USDT",
-                    "B-DOGE_USDT",
-                    "B-SHIB_USDT",
-                    "B-XAU_USDT",
-                  ].map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPair(p)}
-                      className={cn(
-                        "px-4 py-2 rounded-xl text-[10px] font-black transition-all",
-                        pair === p
-                          ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"
-                          : "text-slate-500 hover:text-slate-200 hover:bg-white/5",
-                      )}
-                    >
-                      {p.split("-")[1].replace("_", "/")}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-10">
+                <div className="w-full lg:w-auto overflow-x-auto no-scrollbar pb-2 lg:pb-0">
+                  <div className="flex items-center gap-2 bg-slate-900/40 p-1.5 rounded-2xl border border-white/5 w-max">
+                    {[
+                      "B-BTC_USDT",
+                      "B-ETH_USDT",
 
-              <div className="flex items-center gap-6">
-                {liveBalance !== null && (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20">
-                    <Database className="w-3.5 h-3.5 text-blue-400" />
-                    <span className="text-xs font-black text-blue-400 font-mono">
-                      {liveBalance.toLocaleString()} INR
-                    </span>
+                    ].map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setPair(p)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-[10px] font-black transition-all whitespace-nowrap",
+                          pair === p
+                            ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"
+                            : "text-slate-500 hover:text-slate-200 hover:bg-white/5",
+                        )}
+                      >
+                        {p.split("-")[1].replace("_", "/")}
+                      </button>
+                    ))}
                   </div>
-                )}
-                {tickerPrice && (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs font-black text-emerald-400 font-mono">
-                      ${tickerPrice.toLocaleString()}
-                    </span>
+                </div>
+
+                <div className="flex items-center flex-wrap gap-4 w-full lg:w-auto justify-between lg:justify-end">
+                  <div className="flex items-center gap-4">
+                    {liveBalance !== null && (
+                      <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                        <Database className="w-3.5 h-3.5 text-blue-400" />
+                        <span className="text-xs font-black text-blue-400 font-mono">
+                          {liveBalance.toLocaleString()} INR
+                        </span>
+                      </div>
+                    )}
+                    {tickerPrice && (
+                      <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-black text-emerald-400 font-mono">
+                          ${tickerPrice.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-                <button
-                  onClick={() => setIsSilent(!isSilent)}
-                  className={cn(
-                    "p-3 rounded-2xl border transition-all active:scale-95",
-                    isSilent
-                      ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
-                      : "bg-blue-500/10 border-blue-500/20 text-blue-400",
-                  )}
-                >
-                  {isSilent ? (
-                    <VolumeX className="w-5 h-5" />
-                  ) : (
-                    <Volume2 className="w-5 h-5" />
-                  )}
-                </button>
+                  <button
+                    onClick={() => setIsSilent(!isSilent)}
+                    className={cn(
+                      "p-3 rounded-2xl border transition-all active:scale-95",
+                      isSilent
+                        ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                        : "bg-blue-500/10 border-blue-500/20 text-blue-400",
+                    )}
+                  >
+                    {isSilent ? (
+                      <VolumeX className="w-5 h-5" />
+                    ) : (
+                      <Volume2 className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1911,10 +1913,10 @@ export default function App() {
                       {liveInterval === "D" ? "1D" : liveInterval + "M"}
                     </div>
                   </div>
-                  <div className="h-[500px] w-full bg-slate-950/50 rounded-3xl border border-white/5 overflow-hidden">
+                  <div className="h-[350px] sm:h-[500px] w-full bg-slate-950/50 rounded-[2rem] border border-white/5 overflow-hidden">
                     <LiveMarketChart
                       candles={candles}
-                      trades={backtestResult?.trades || []}
+                      trades={[...(backtestResult?.trades || []), ...combinedActiveTrades]}
                       selectedTrade={selectedTradeForChart}
                     />
                   </div>
@@ -1922,9 +1924,7 @@ export default function App() {
 
                 {/* Active Trade Card */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {!backtestResult ||
-                    backtestResult.trades.filter((t) => t.status === "open")
-                      .length === 0 ? (
+                  {combinedActiveTrades.length === 0 ? (
                     <div className="md:col-span-2 p-12 border-2 border-dashed border-white/5 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-600">
                       <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center mb-4">
                         <Zap className="w-8 h-8 opacity-20" />
@@ -1934,9 +1934,8 @@ export default function App() {
                       </p>
                     </div>
                   ) : (
-                    backtestResult.trades
-                      .filter((t) => t.status === "open")
-                      .slice(0, 1)
+                    combinedActiveTrades
+                      .slice(0, 2)
                       .map((trade, i) => (
                         <motion.div
                           key={i}
@@ -1985,9 +1984,13 @@ export default function App() {
                                   {trade.profit >= 0 ? "+" : ""}$
                                   {trade.profit.toFixed(2)}
                                 </p>
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                  Live P/L
-                                </p>
+                                <div className={cn(
+                                  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider mt-1",
+                                  trade.profit >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+                                )}>
+                                  <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", trade.profit >= 0 ? "bg-emerald-500" : "bg-rose-500")} />
+                                  {trade.pnlPercent?.toFixed(2)}%
+                                </div>
                               </div>
                             </div>
 
@@ -1998,24 +2001,24 @@ export default function App() {
                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">
                                   Entry Price
                                 </p>
-                                <p className="text-sm font-bold text-white font-mono">
+                                <p className="text-xs font-bold text-white font-mono">
                                   ${trade.entryPrice.toLocaleString()}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">
-                                  Stop Loss
+                                  Stop Loss {trade.trailingCount ? " (Trailed)" : ""}
                                 </p>
-                                <p className="text-sm font-bold text-rose-400 font-mono">
+                                <p className="text-xs font-bold text-rose-400 font-mono">
                                   ${trade.sl.toLocaleString()}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-[9px] font-black text-slate-500 uppercase mb-1">
-                                  Target
+                                  Live Price
                                 </p>
-                                <p className="text-sm font-bold text-emerald-400 font-mono">
-                                  ${trade.tp?.toLocaleString() || "N/A"}
+                                <p className="text-xs font-bold text-blue-400 animate-pulse font-mono">
+                                  ${tickerPrice ? tickerPrice.toLocaleString() : '---'}
                                 </p>
                               </div>
                             </div>
@@ -2209,8 +2212,6 @@ function LiveMarketChart({
 
     // Add markers for trades
     const markers: any[] = [];
-
-    // If a trade is selected from the log, prioritize its markers
     const tradesToMark = selectedTrade ? [selectedTrade] : trades;
 
     tradesToMark.forEach((trade) => {
@@ -2265,7 +2266,7 @@ function LiveMarketChart({
     }
 
     // Add SL/TP Lines for the latest active trade
-    const activeTrade = trades.find((t) => t.status === "open");
+    const activeTrade = trades?.find((t) => t.status === "open");
     if (candleSeriesRef.current) {
       // Clear existing lines
       if (slLineRef.current) {
@@ -2675,10 +2676,10 @@ function ResultCard({
       >
         <Icon className="w-8 h-8" />
       </div>
-      <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 mb-2">
+      <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-600 mb-1 md:mb-2">
         {title}
       </p>
-      <p className={cn("text-4xl font-black tracking-tighter", color)}>
+      <p className={cn("text-2xl md:text-4xl font-black tracking-tighter", color)}>
         {value}
       </p>
     </div>
@@ -2700,14 +2701,14 @@ function ViewToggle({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all",
+        "flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all whitespace-nowrap",
         active
-          ? "bg-blue-600 text-white shadow-xl shadow-blue-600/20"
-          : "text-slate-500 hover:text-slate-300",
+          ? "bg-blue-600 text-white shadow-lg sm:shadow-xl shadow-blue-600/20"
+          : "text-slate-500 hover:text-slate-300 hover:bg-white/5",
       )}
     >
-      <Icon className="w-4 h-4" />
-      {label}
+      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      <span className="hidden xs:inline">{label}</span>
     </button>
   );
 }
