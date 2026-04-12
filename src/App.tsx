@@ -601,6 +601,7 @@ export default function App() {
       socket.emit("subscribe", pair);
 
       const handlePriceChange = (data: any) => {
+        console.log(data,'data-----frontend handlePriceChange')
         const rawPrice = data.p || data.price || data.last_price;
         if (rawPrice && (!data.m || data.m === pair)) {
           const price = parseFloat(rawPrice);
