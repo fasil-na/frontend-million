@@ -116,6 +116,8 @@ interface Strategy {
 
 
 
+// const API_BASE_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api";
+// const SOCKET_URL = "http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
 const API_BASE_URL = window.location.hostname === "localhost" ? "http://localhost:5001/api" : "/api";
 const SOCKET_URL = window.location.hostname === "localhost" ? "http://localhost:5001" : "/";
@@ -566,10 +568,7 @@ export default function App() {
         fetchPaperTrades();
       });
       socket.on("candlestick", (data) => {
-<<<<<<< HEAD
         console.log(data, 'data=====')
-=======
->>>>>>> 1c64d4aaf1c47892663da0c90cffa4084904f09c
         if (data && data.time) {
           setCandles((prev) => {
             // Update existing candle or prepend new one
