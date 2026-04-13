@@ -517,7 +517,7 @@ export default function App() {
       const payload = {
         side,
         pair: pair.replace("B-", "").replace("_", ""),
-        price: 71614,
+        price: 0.1900,
         capital: initialCapital,
       };
 
@@ -1610,6 +1610,7 @@ export default function App() {
                     {[
                       "B-BTC_USDT",
                       "B-ETH_USDT",
+                      "B-SUSHI_USDT"
 
                     ].map((p) => (
                       <button
