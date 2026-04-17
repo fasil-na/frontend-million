@@ -125,24 +125,30 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-const API_BASE_URL = `/api`;
-const SOCKET_URL = `/`;
+// const API_BASE_URL = `/api`;
+// const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-// const API_BASE_URL = `http://localhost:5001/api`;
-// const SOCKET_URL = `http://localhost:5001`;
+const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
+  ? "http://localhost:5001/api" 
+  : "/api";
+const SOCKET_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:5001"
+  : "/";
 
 const socket = io(SOCKET_URL, {
-  transports: ["websocket"],
+  transports: ["websocket", "polling"],
   upgrade: true,
   reconnection: true,
   reconnectionAttempts: Infinity,
   reconnectionDelay: 1000,
 });
 
-function PaperTradeHistoryView() {
+
+
+function TradeHistoryView() {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -153,10 +159,10 @@ function PaperTradeHistoryView() {
   const fetchTrades = async () => {
     try {
       setLoading(true);
-      const { data } = await axios.get(`${API_BASE_URL}/paper-trades`);
+      const { data } = await axios.get(`${API_BASE_URL}/trade-history`);
       setTrades(data);
     } catch (err) {
-      console.error("Failed to fetch paper trades", err);
+      console.error("Failed to fetch trade history", err);
     } finally {
       setLoading(false);
     }
@@ -165,7 +171,7 @@ function PaperTradeHistoryView() {
   const handleDelete = async (entryTime: string) => {
     if (!window.confirm("Delete this trade record?")) return;
     try {
-      await axios.delete(`${API_BASE_URL}/paper-trades/${entryTime}`);
+      await axios.delete(`${API_BASE_URL}/trade-history/${entryTime}`);
       setTrades(prev => prev.filter(t => t.entryTime !== entryTime));
     } catch (err) {
       console.error("Failed to delete trade", err);
@@ -174,9 +180,9 @@ function PaperTradeHistoryView() {
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm("CLEAR ALL paper trade history? This cannot be undone.")) return;
+    if (!window.confirm("CLEAR ALL trade history? This cannot be undone.")) return;
     try {
-      await axios.delete(`${API_BASE_URL}/paper-trades/clear`);
+      await axios.delete(`${API_BASE_URL}/trade-history/clear`);
       setTrades([]);
     } catch (err) {
       console.error("Failed to clear history", err);
@@ -192,9 +198,9 @@ function PaperTradeHistoryView() {
     >
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-black text-white">Paper Trade History</h2>
+          <h2 className="text-3xl font-black text-white">Trade History</h2>
           <p className="text-sm text-slate-500 font-bold uppercase tracking-widest mt-1">
-            Simulated Executions Log
+            Real Executions Log
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -218,7 +224,7 @@ function PaperTradeHistoryView() {
         <div className="max-h-[600px] overflow-auto no-scrollbar">
           {trades.length === 0 ? (
             <div className="p-12 text-center text-slate-500 font-bold uppercase tracking-widest text-xs">
-              No Paper Trades Recorded Yet
+              No Trades Recorded Yet
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
@@ -298,7 +304,7 @@ function PaperTradeHistoryView() {
 }
 
 export default function App() {
-  const [view, setView] = useState<"backtest" | "trade" | "paper-history">(
+  const [view, setView] = useState<"backtest" | "trade" | "history">(
     "trade",
   );
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -308,7 +314,6 @@ export default function App() {
   const [liveInterval, setLiveInterval] = useState("60");
   const [isLiveMonitoring, setIsLiveMonitoring] = useState(false);
   const [isLiveTrading, setIsLiveTrading] = useState(false);
-  const [isPaperTrading, setIsPaperTrading] = useState(true);
   const [tickerPrice, setTickerPrice] = useState<number | null>(null);
 
   // Common Backtest State (Restored)
@@ -354,10 +359,6 @@ export default function App() {
     updateBackendSettings({ isLiveTrading });
   }, [isLiveTrading]);
 
-  useEffect(() => {
-    updateBackendSettings({ isPaperTrading });
-  }, [isPaperTrading]);
-
   // Leverage & Trailing SL
   const [maxPositionSize, setMaxPositionSize] = useState(100);
   const [leverage, setLeverage] = useState(0);
@@ -382,7 +383,7 @@ export default function App() {
   const [configTab, setConfigTab] = useState<"manual" | "optimize">("manual");
   const [startYear, setStartYear] = useState(new Date().getFullYear() - 3);
   const [isSilent, setIsSilent] = useState(false);
-  const [paperTrades, setPaperTrades] = useState<Trade[]>([]);
+  const [tradeHistory, setTradeHistory] = useState<Trade[]>([]);
 
   // Audio Alert
   // const playAlert = useCallback(() => {
@@ -416,7 +417,6 @@ export default function App() {
       if (s.timeInterval) setLiveInterval(s.timeInterval);
       if (s.isLiveMonitoring !== undefined) setIsLiveMonitoring(s.isLiveMonitoring);
       if (s.isLiveTrading !== undefined) setIsLiveTrading(s.isLiveTrading);
-      if (s.isPaperTrading !== undefined) setIsPaperTrading(s.isPaperTrading);
       if (s.leverage !== undefined) setLeverage(s.leverage);
       isSettingsLoaded.current = true;
     } catch (err) {
@@ -425,19 +425,21 @@ export default function App() {
     }
   };
 
-  const fetchPaperTrades = async () => {
+
+
+  const fetchTradeHistory = async () => {
     try {
-      const { data } = await axios.get(`${API_BASE_URL}/paper-trades`);
-      setPaperTrades(data);
+      const { data } = await axios.get(`${API_BASE_URL}/trade-history`);
+      setTradeHistory(data);
     } catch (err) {
-      console.error("Failed to fetch paper trades", err);
+      console.error("Failed to fetch trade history", err);
     }
   };
 
   useEffect(() => {
     fetchStrategies();
     fetchSettings();
-    fetchPaperTrades();
+    fetchTradeHistory();
   }, []);
   const fetchMarketData = async () => {
     try {
@@ -517,7 +519,7 @@ export default function App() {
       const payload = {
         side,
         pair: pair.replace("B-", "").replace("_", ""),
-        price: 0.1900,
+        price: 0.1946,
         capital: initialCapital,
       };
 
@@ -619,10 +621,6 @@ export default function App() {
       };
 
       socket.on("price-change", handlePriceChange);
-      socket.on("paper-trade-update", () => {
-        console.log("Paper trade updated on backend, refreshing...");
-        fetchPaperTrades();
-      });
       socket.on("candlestick", (data) => {
         if (data && data.time) {
           setCandles((prev) => {
@@ -674,8 +672,17 @@ export default function App() {
     selectedStrategyId,
     initialCapital,
     liveInterval,
-    isPaperTrading,
   ]);
+
+  useEffect(() => {
+    socket.on("trade-history-update", () => {
+      console.log("Trade history updated on backend, refreshing...");
+      fetchTradeHistory();
+    });
+    return () => {
+      socket.off("trade-history-update");
+    };
+  }, []);
 
   const tradesByDay = useMemo(() => {
     if (!backtestResult) return {};
@@ -699,13 +706,13 @@ export default function App() {
 
   const combinedActiveTrades = useMemo(() => {
     const backtestOpen = Array.isArray(backtestResult?.trades) ? backtestResult.trades.filter(t => t?.status === 'open') : [];
-    const paperOpen = Array.isArray(paperTrades) ? paperTrades.filter(t => t?.status === 'open') : [];
+    const liveOpen = Array.isArray(tradeHistory) ? tradeHistory.filter(t => t?.status === 'open') : [];
 
     // De-duplicate by entryTime to avoid double showing
     const seen = new Set();
     const combined: Trade[] = [];
 
-    [...paperOpen, ...backtestOpen].forEach(t => {
+    [...liveOpen, ...backtestOpen].forEach(t => {
       const key = `${t.entryTime}-${t.direction}`;
       if (!seen.has(key)) {
         seen.add(key);
@@ -726,7 +733,7 @@ export default function App() {
     });
 
     return combined;
-  }, [backtestResult, paperTrades, tickerPrice, initialCapital]);
+  }, [backtestResult, tradeHistory, tickerPrice, initialCapital]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30">
@@ -737,8 +744,8 @@ export default function App() {
             trade={selectedTradeForView}
             pair={pair}
             resolution={interval}
-            isLiveMonitoring={isLiveMonitoring}
             onClose={() => setSelectedTradeForView(null)}
+            isLiveMonitoring={isLiveMonitoring}
           />
         )}
       </AnimatePresence>
@@ -777,10 +784,10 @@ export default function App() {
               label="Test"
             />
             <ViewToggle
-              active={view === "paper-history"}
-              onClick={() => setView("paper-history")}
+              active={view === "history"}
+              onClick={() => setView("history")}
               icon={Database}
-              label="Log"
+              label="Trades"
             />
           </div>
 
@@ -1014,20 +1021,18 @@ export default function App() {
                           </button>
                         </div>
 
-                        {(isLiveTrading || isPaperTrading) && (
+                        {isLiveTrading && (
                           <motion.div
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
                             className="space-y-4"
                           >
-                            <div className={cn("p-4 border rounded-2xl space-y-2", isLiveTrading ? "bg-emerald-500/5 border-emerald-500/10" : "bg-indigo-500/5 border-indigo-500/10")}>
-                              <p className={cn("text-[10px] font-black uppercase tracking-widest", isLiveTrading ? "text-emerald-400" : "text-indigo-400")}>
-                                {isLiveTrading ? "Live Auto-Trade Active" : "Paper Trade Mode Active"}
+                            <div className="p-4 border rounded-2xl space-y-2 bg-emerald-500/5 border-emerald-500/10">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                                Live Auto-Trade Active
                               </p>
                               <p className="text-[10px] font-bold text-slate-500 leading-relaxed">
-                                {isLiveTrading
-                                  ? "Trading with real funds. Ensure your backend .env is configured with API credentials."
-                                  : "Simulated trading. Records will be saved to your paper history log."}
+                                Trading with real funds. Ensure your backend .env is configured with API credentials.
                               </p>
                             </div>
 
@@ -1695,22 +1700,7 @@ export default function App() {
                           <div className="w-10 h-5 bg-slate-800 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                         </label>
                       </div>
-                      {isLiveMonitoring && (
-                        <div className="flex items-center justify-between p-4 bg-slate-950/50 rounded-2xl border border-white/5">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">
-                            Paper Trade
-                          </span>
-                          <label className="relative inline-flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isPaperTrading}
-                              onChange={(e) => setIsPaperTrading(e.target.checked)}
-                              className="sr-only peer"
-                            />
-                            <div className="w-10 h-5 bg-slate-800 rounded-full peer peer-checked:bg-indigo-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
-                          </label>
-                        </div>
-                      )}
+
                       <div className="flex items-center justify-between p-4 bg-slate-950/50 rounded-2xl border border-white/5">
                         <span className="text-[10px] font-bold text-slate-400 uppercase">
                           Auto-Trade
@@ -2021,8 +2011,9 @@ export default function App() {
           </motion.div>
         )}
 
-        {view === "paper-history" && (
-          <PaperTradeHistoryView />
+
+        {view === "history" && (
+          <TradeHistoryView />
         )}
       </main>
 
@@ -2356,14 +2347,14 @@ function TradeViewModal({
   trade,
   pair,
   resolution,
-  isLiveMonitoring,
   onClose,
+  isLiveMonitoring,
 }: {
   trade: Trade;
   pair: string;
   resolution: string;
-  isLiveMonitoring: boolean;
   onClose: () => void;
+  isLiveMonitoring: boolean;
 }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
