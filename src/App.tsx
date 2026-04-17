@@ -125,18 +125,14 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-// const API_BASE_URL = `/api`;
-// const SOCKET_URL = `/`;
+const API_BASE_URL = `/api`;
+const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
-  ? "http://localhost:5001/api" 
-  : "/api";
-const SOCKET_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-  ? "http://localhost:5001"
-  : "/";
+// const API_BASE_URL =  "http://localhost:5001/api" 
+// const SOCKET_URL =  "http://localhost:5001"
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
@@ -253,18 +249,18 @@ function TradeHistoryView() {
                     </td>
                     <td className="px-5 py-4">
                       <div className={cn("text-xs font-black uppercase", t.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
-                        {t.direction} @ ${t.entryPrice?.toFixed(2)}
+                        {t.direction} @ ${t.entryPrice}
                       </div>
                       {t.exitPrice && (
                         <div className="text-[10px] text-slate-400">
-                          Exited @ ${t.exitPrice?.toFixed(2)}
+                          Exited @ ${t.exitPrice}
                           <span className="ml-2 opacity-50 italic">({t.exitReason || 'Target Hit'})</span>
                         </div>
                       )}
                     </td>
                     <td className="px-5 py-4">
-                      <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl?.toFixed(2) || 'N/A'}</div>
-                      <div className="text-[10px] text-slate-500">Units: {t.units?.toFixed(4) || '0'}</div>
+                      <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl || 'N/A'}</div>
+                      <div className="text-[10px] text-slate-500">Units: {t.units || '0'}</div>
                     </td>
                     <td className="px-5 py-4 text-center">
                       <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -274,11 +270,11 @@ function TradeHistoryView() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <span className={cn("text-sm font-black", t.profit >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                        {t.profit >= 0 ? '+' : ''}{t.profit?.toFixed(2)}
+                        {t.profit >= 0 ? '+' : ''}{t.profit}
                       </span>
                       {t.pnlPercent && (
                         <div className={cn("text-[10px] font-bold", t.pnlPercent >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
-                          {t.pnlPercent.toFixed(2)}%
+                          {t.pnlPercent}%
                         </div>
                       )}
                     </td>
@@ -396,7 +392,7 @@ export default function App() {
   const fetchStrategies = async () => {
     try {
       const response = await axios.get<Strategy[]>(
-        `${API_BASE_URL}/strategies`,
+        `${API_BASE_URL}/market/strategies`,
       );
       setStrategies(response.data);
       if (response.data.length > 0) {
@@ -444,7 +440,7 @@ export default function App() {
   const fetchMarketData = async () => {
     try {
       const response = await axios.get<ApiResponse>(
-        `${API_BASE_URL}/market-data`,
+        `${API_BASE_URL}/market/market-data`,
         {
           params: {
             pair,
@@ -464,8 +460,9 @@ export default function App() {
   const fetchDynamicLeverage = async () => {
     try {
       const response = await axios.get<{ leverage: number }>(
-        `${API_BASE_URL}/leverage/${pair}`,
+        `${API_BASE_URL}/market/leverage/${pair}`,
       );
+      console.log(response.data,'response.data.----')
       setDynamicMaxLeverage(response.data.leverage);
     } catch (err) {
       console.error("Leverage fetch failed:", err);
@@ -482,7 +479,7 @@ export default function App() {
       }
 
       const response = await axios.post<BacktestResponse>(
-        `${API_BASE_URL}/backtest`,
+        `${API_BASE_URL}/market/backtest`,
         {
           pair,
           resolution: interval,
@@ -1428,7 +1425,7 @@ export default function App() {
                                                 •
                                               </span>
                                               <span className="text-slate-500">
-                                                {trade.units?.toFixed(4)} UNITS
+                                                {trade.units} UNITS
                                               </span>
                                               {trade.exitReason && (
                                                 <>
@@ -1564,7 +1561,7 @@ export default function App() {
                                 )}
                               >
                                 {trade.profit >= 0 ? "+" : ""}$
-                                {trade.profit.toFixed(2)}
+                                {trade.profit}
                               </p>
                               <p className="text-[10px] font-bold text-slate-500 uppercase">
                                 LIVE P/L
@@ -1859,7 +1856,7 @@ export default function App() {
                           </div>
                           <div className="text-right">
                             <span className="text-slate-300 block">
-                              ${trade.entryPrice.toFixed(0)}
+                              ${trade.entryPrice}
                             </span>
                             <span
                               className={cn(
@@ -1870,7 +1867,7 @@ export default function App() {
                               )}
                             >
                               {trade.profit >= 0 ? "+" : ""}
-                              {trade.profit.toFixed(1)}
+                              {trade.profit}
                             </span>
                           </div>
                         </div>
@@ -1961,14 +1958,14 @@ export default function App() {
                                   )}
                                 >
                                   {trade.profit >= 0 ? "+" : ""}$
-                                  {trade.profit.toFixed(2)}
+                                  {trade.profit}
                                 </p>
                                 <div className={cn(
                                   "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider mt-1",
                                   trade.profit >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
                                 )}>
                                   <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", trade.profit >= 0 ? "bg-emerald-500" : "bg-rose-500")} />
-                                  {trade.pnlPercent?.toFixed(2)}%
+                                  {trade.pnlPercent}%
                                 </div>
                               </div>
                             </div>
@@ -2202,7 +2199,7 @@ function LiveMarketChart({
         position: trade.direction === "buy" ? "belowBar" : "aboveBar",
         color: trade.direction === "buy" ? "#10b981" : "#ef4444",
         shape: trade.direction === "buy" ? "arrowUp" : "arrowDown",
-        text: `ENTRY ${trade.direction.toUpperCase()} @ ${trade.entryPrice.toFixed(2)}`,
+        text: `ENTRY ${trade.direction.toUpperCase()} @ ${trade.entryPrice}`,
         size: 2,
       });
 
@@ -2225,7 +2222,7 @@ function LiveMarketChart({
           position: trade.direction === "buy" ? "aboveBar" : "belowBar",
           color: "#94a3b8",
           shape: trade.direction === "buy" ? "arrowDown" : "arrowUp",
-          text: `EXIT ${trade.exitReason || ""} @ ${trade.exitPrice?.toFixed(2)}`,
+          text: `EXIT ${trade.exitReason || ""} @ ${trade.exitPrice}`,
           size: 2,
         });
       }
@@ -2265,7 +2262,7 @@ function LiveMarketChart({
           lineWidth: 2,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
-          title: `SL: ${activeTrade.sl.toFixed(2)}`,
+          title: `SL: ${activeTrade.sl}`,
         });
 
         if (activeTrade.tp) {
@@ -2275,7 +2272,7 @@ function LiveMarketChart({
             lineWidth: 2,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: `TP: ${activeTrade.tp.toFixed(2)}`,
+            title: `TP: ${activeTrade.tp}`,
           });
         }
       }
