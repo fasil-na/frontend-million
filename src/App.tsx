@@ -126,14 +126,14 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-// const API_BASE_URL = `/api`;
-// const SOCKET_URL = `/`;
+const API_BASE_URL = `/api`;
+const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-const API_BASE_URL =  "http://localhost:5001/api" 
-const SOCKET_URL =  "http://localhost:5001"
+// const API_BASE_URL =  "http://localhost:5001/api" 
+// const SOCKET_URL =  "http://localhost:5001"
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
@@ -285,10 +285,10 @@ function TradeHistoryView() {
                       )}
                     </td>
                     <td className="px-10 py-4 text-center">
-                      <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest", 
-                        t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 
-                        t.status === 'failed' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
-                        'bg-slate-800 text-slate-400 border border-white/5')}>
+                      <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest",
+                        t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                          t.status === 'failed' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
+                            'bg-slate-800 text-slate-400 border border-white/5')}>
                         {t.status}
                       </span>
                     </td>
@@ -477,7 +477,7 @@ export default function App() {
       const response = await axios.get<{ leverage: number }>(
         `${API_BASE_URL}/market/leverage/${pair}`,
       );
-      console.log(response.data,'response.data.----')
+      console.log(response.data, 'response.data.----')
       setDynamicMaxLeverage(response.data.leverage);
     } catch (err) {
       console.error("Leverage fetch failed:", err);
@@ -699,7 +699,7 @@ export default function App() {
   const tradesByDay = useMemo(() => {
     if (!backtestResult) return {};
     return backtestResult.trades.reduce(
-      (acc, trade:any) => {
+      (acc, trade: any) => {
         const day = dayjs(trade.entryTime).format("YYYY-MM-DD");
         if (!acc[day])
           acc[day] = { trades: [], profit: 0, success: 0, failure: 0 };
