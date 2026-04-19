@@ -60,15 +60,16 @@ interface Trade {
   exitTime?: string;
   direction: "buy" | "sell";
   entryPrice: number;
-  exitPrice?: number;
-  profit: number;
-  status: "open" | "closed";
+  status: "open" | "closed" | "failed";
   exitReason?: string;
+  executionError?: string;
   units?: number;
   sl: number;
   tp?: number;
   pnlPercent?: number;
   trailingCount?: number;
+  exitPrice?: number;
+  profit?: number;
 }
 
 interface BacktestResponse {
@@ -125,14 +126,14 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-const API_BASE_URL = `/api`;
-const SOCKET_URL = `/`;
+// const API_BASE_URL = `/api`;
+// const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-// const API_BASE_URL =  "http://localhost:5001/api" 
-// const SOCKET_URL =  "http://localhost:5001"
+const API_BASE_URL =  "http://localhost:5001/api" 
+const SOCKET_URL =  "http://localhost:5001"
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
@@ -259,8 +260,13 @@ function TradeHistoryView() {
                       )}
                     </td>
                     <td className="px-5 py-4">
-                      <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl || 'N/A'}</div>
-                      <div className="text-[10px] text-slate-500">Units: {t.units || '0'}</div>
+                      <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl.toFixed(4) || 'N/A'}</div>
+                      <div className="text-[10px] text-slate-500">Units: {t.units.toFixed(4) || '0'}</div>
+                      {t.status === 'failed' && t.executionError && (
+                        <div className="mt-2 p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[9px] font-bold text-rose-400 leading-tight">
+                          Error: {t.executionError}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-center">
                       <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -269,8 +275,8 @@ function TradeHistoryView() {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <span className={cn("text-sm font-black", t.profit >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                        {t.profit >= 0 ? '+' : ''}{t.profit}
+                      <span className={cn("text-sm font-black", (t.profit ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                        {(t.profit ?? 0) >= 0 ? '+' : ''}{(t.profit ?? 0).toFixed(2)}
                       </span>
                       {t.pnlPercent && (
                         <div className={cn("text-[10px] font-bold", t.pnlPercent >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
@@ -279,7 +285,10 @@ function TradeHistoryView() {
                       )}
                     </td>
                     <td className="px-10 py-4 text-center">
-                      <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest", t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-slate-800 text-slate-400 border border-white/5')}>
+                      <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest", 
+                        t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 
+                        t.status === 'failed' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
+                        'bg-slate-800 text-slate-400 border border-white/5')}>
                         {t.status}
                       </span>
                     </td>
@@ -310,6 +319,7 @@ export default function App() {
   const [liveInterval, setLiveInterval] = useState("60");
   const [isLiveMonitoring, setIsLiveMonitoring] = useState(false);
   const [isLiveTrading, setIsLiveTrading] = useState(false);
+  const [riskMode, setRiskMode] = useState<"minimal" | "capital">("minimal");
   const [tickerPrice, setTickerPrice] = useState<number | null>(null);
 
   // Common Backtest State (Restored)
@@ -354,6 +364,10 @@ export default function App() {
   useEffect(() => {
     updateBackendSettings({ isLiveTrading });
   }, [isLiveTrading]);
+
+  useEffect(() => {
+    updateBackendSettings({ riskMode });
+  }, [riskMode]);
 
   // Leverage & Trailing SL
   const [maxPositionSize, setMaxPositionSize] = useState(100);
@@ -414,6 +428,7 @@ export default function App() {
       if (s.isLiveMonitoring !== undefined) setIsLiveMonitoring(s.isLiveMonitoring);
       if (s.isLiveTrading !== undefined) setIsLiveTrading(s.isLiveTrading);
       if (s.leverage !== undefined) setLeverage(s.leverage);
+      if (s.riskMode) setRiskMode(s.riskMode);
       isSettingsLoaded.current = true;
     } catch (err) {
       console.error("Failed to fetch settings:", err);
@@ -684,13 +699,13 @@ export default function App() {
   const tradesByDay = useMemo(() => {
     if (!backtestResult) return {};
     return backtestResult.trades.reduce(
-      (acc, trade) => {
+      (acc, trade:any) => {
         const day = dayjs(trade.entryTime).format("YYYY-MM-DD");
         if (!acc[day])
           acc[day] = { trades: [], profit: 0, success: 0, failure: 0 };
         acc[day].trades.push(trade);
-        acc[day].profit += trade.profit;
-        if (trade.profit > 0) acc[day].success++;
+        acc[day].profit += (trade.profit ?? 0);
+        if ((trade.profit ?? 0) > 0) acc[day].success++;
         else acc[day].failure++;
         return acc;
       },
@@ -713,7 +728,7 @@ export default function App() {
       const key = `${t.entryTime}-${t.direction}`;
       if (!seen.has(key)) {
         seen.add(key);
-        const trade = { ...t };
+        const trade: Trade = { ...t };
         // Recalculate profit if ticker price is available for open positions
         if (trade.status === 'open' && tickerPrice) {
           const diff = trade.direction === 'buy' ? (tickerPrice - trade.entryPrice) : (trade.entryPrice - tickerPrice);
@@ -723,7 +738,7 @@ export default function App() {
           trade.profit = diff * units;
 
           const margin = (units * trade.entryPrice) / currentLeverage;
-          trade.pnlPercent = (trade.profit / margin) * 100;
+          trade.pnlPercent = ((trade.profit ?? 0) / margin) * 100;
         }
         combined.push(trade);
       }
@@ -967,6 +982,35 @@ export default function App() {
                             className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none"
                           />
                         </InputGroup>
+                      </div>
+
+                      <div className="flex items-center justify-between px-2 py-2">
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-emerald-400" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            Risk Mode: {riskMode === 'capital' ? 'Manual Capital' : 'Minimal Notional'}
+                          </span>
+                        </div>
+                        <div className="flex bg-slate-900 p-1 rounded-xl border border-white/5">
+                          <button
+                            onClick={() => setRiskMode("minimal")}
+                            className={cn(
+                              "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
+                              riskMode === "minimal" ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-300"
+                            )}
+                          >
+                            Minimal
+                          </button>
+                          <button
+                            onClick={() => setRiskMode("capital")}
+                            className={cn(
+                              "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
+                              riskMode === "capital" ? "bg-emerald-600 text-white" : "text-slate-500 hover:text-slate-300"
+                            )}
+                          >
+                            Capital
+                          </button>
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between px-2 py-2">
@@ -1462,13 +1506,13 @@ export default function App() {
                                       <td
                                         className={cn(
                                           "px-5 py-6 text-right font-black text-sm",
-                                          trade.profit > 0
+                                          (trade.profit ?? 0) > 0
                                             ? "text-emerald-400"
                                             : "text-rose-400",
                                         )}
                                       >
-                                        {trade.profit > 0 ? "+" : ""}
-                                        {trade.profit.toLocaleString(
+                                        {(trade.profit ?? 0) > 0 ? "+" : ""}
+                                        {(trade.profit ?? 0).toLocaleString(
                                           undefined,
                                           {
                                             minimumFractionDigits: 2,
@@ -1555,13 +1599,13 @@ export default function App() {
                               <p
                                 className={cn(
                                   "text-lg font-black",
-                                  trade.profit >= 0
+                                  (trade.profit ?? 0) >= 0
                                     ? "text-emerald-400"
                                     : "text-rose-400",
                                 )}
                               >
-                                {trade.profit >= 0 ? "+" : ""}$
-                                {trade.profit}
+                                {(trade.profit ?? 0) >= 0 ? "+" : ""}$
+                                {(trade.profit ?? 0)}
                               </p>
                               <p className="text-[10px] font-bold text-slate-500 uppercase">
                                 LIVE P/L
@@ -1781,7 +1825,7 @@ export default function App() {
                             <span className="text-emerald-400">
                               {
                                 backtestResult.trades.filter(
-                                  (t) => t.profit > 0,
+                                  (t) => (t.profit ?? 0) > 0,
                                 ).length
                               }
                             </span>
@@ -1789,7 +1833,7 @@ export default function App() {
                             <span className="text-rose-400">
                               {
                                 backtestResult.trades.filter(
-                                  (t) => t.profit < 0,
+                                  (t) => (t.profit ?? 0) < 0,
                                 ).length
                               }
                             </span>
@@ -1861,13 +1905,13 @@ export default function App() {
                             <span
                               className={cn(
                                 "font-black",
-                                trade.profit >= 0
+                                (trade.profit ?? 0) >= 0
                                   ? "text-emerald-400"
                                   : "text-rose-400",
                               )}
                             >
-                              {trade.profit >= 0 ? "+" : ""}
-                              {trade.profit}
+                              {(trade.profit ?? 0) >= 0 ? "+" : ""}
+                              {(trade.profit ?? 0)}
                             </span>
                           </div>
                         </div>
@@ -1951,20 +1995,22 @@ export default function App() {
                               <div className="text-right">
                                 <p
                                   className={cn(
-                                    "text-3xl font-black tracking-tighter",
-                                    trade.profit >= 0
+                                    "text-xs font-black",
+                                    (trade.profit ?? 0) >= 0
                                       ? "text-emerald-400"
                                       : "text-rose-400",
                                   )}
                                 >
-                                  {trade.profit >= 0 ? "+" : ""}$
-                                  {trade.profit}
+                                  {(trade.profit ?? 0) >= 0 ? "+" : ""}$
+                                  {(trade.profit ?? 0)}
                                 </p>
                                 <div className={cn(
-                                  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider mt-1",
-                                  trade.profit >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+                                  "px-2 py-0.5 rounded-md text-[8px] font-black uppercase flex items-center gap-1.5",
+                                  (trade.profit ?? 0) >= 0
+                                    ? "bg-emerald-500/10 text-emerald-400"
+                                    : "bg-rose-500/10 text-rose-400",
                                 )}>
-                                  <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", trade.profit >= 0 ? "bg-emerald-500" : "bg-rose-500")} />
+                                  <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", (trade.profit ?? 0) >= 0 ? "bg-emerald-500" : "bg-rose-500")} />
                                   {trade.pnlPercent}%
                                 </div>
                               </div>
@@ -2222,7 +2268,7 @@ function LiveMarketChart({
           position: trade.direction === "buy" ? "aboveBar" : "belowBar",
           color: "#94a3b8",
           shape: trade.direction === "buy" ? "arrowDown" : "arrowUp",
-          text: `EXIT ${trade.exitReason || ""} @ ${trade.exitPrice}`,
+          text: `EXIT ${trade.exitReason || ""} @ ${trade.exitPrice || "---"}`,
           size: 2,
         });
       }
@@ -2286,7 +2332,7 @@ function LiveMarketChart({
         ? Math.floor(dayjs(selectedTrade.exitTime).valueOf() / 1000) + istOffset
         : Math.floor(dayjs().valueOf() / 1000) + istOffset;
 
-      const isProfit = selectedTrade.profit >= 0;
+      const isProfit = (selectedTrade.profit ?? 0) >= 0;
       tradeHighlightSeriesRef.current.applyOptions({
         topColor: isProfit
           ? "rgba(16, 185, 129, 0.4)"
@@ -2585,10 +2631,11 @@ function TradeViewModal({
                 trade.exitPrice ? `$${trade.exitPrice.toLocaleString()}` : "---"
               }
             />
-            <ModalStat
-              label="Net Profit"
-              value={`$${trade.profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-              color={trade.profit > 0 ? "text-emerald-400" : "text-rose-400"}
+            <ResultCard
+              title="Execution Net Profit"
+              value={`$${(trade.profit ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              icon={TrendingUp}
+              color={(trade.profit ?? 0) > 0 ? "text-emerald-400" : "text-rose-400"}
             />
             <ModalStat
               label="Timeline"
