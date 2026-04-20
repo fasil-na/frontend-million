@@ -126,14 +126,14 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-// const API_BASE_URL = `/api`;
-// const SOCKET_URL = `/`;
+const API_BASE_URL = `/api`;
+const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-const API_BASE_URL =  "http://localhost:5001/api" 
-const SOCKET_URL =  "http://localhost:5001"
+// const API_BASE_URL =  "http://localhost:5001/api" 
+// const SOCKET_URL =  "http://localhost:5001"
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
@@ -276,7 +276,7 @@ function TradeHistoryView() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <span className={cn("text-sm font-black", (t.profit ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                        {(t.profit ?? 0) >= 0 ? '+' : ''}{(t.profit ?? 0).toFixed(2)}
+                        {(t.profit ?? 0) >= 0 ? '+' : ''}{(t.profit ?? 0).toFixed(4)}
                       </span>
                       {t.pnlPercent && (
                         <div className={cn("text-[10px] font-bold", t.pnlPercent >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
@@ -1349,10 +1349,11 @@ export default function App() {
                     <div className="max-h-[600px] overflow-y-auto">
                       <table className="w-full text-left">
                         <thead>
-                          <tr className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-950/40">
+                          <tr className="text-[10px] font-black uppercase tracking-widest text-slate-600 bg-slate-950/40 sticky top-0 z-10">
                             <th className="px-8 py-5">Time/Type</th>
-                            <th className="px-5 py-5">Entry Price</th>
-                            <th className="px-5 py-5">Exit Price</th>
+                            <th className="px-5 py-5">Entry / Exit</th>
+                            <th className="px-5 py-5">SL / Units</th>
+                            <th className="px-5 py-5 text-center">Trailing</th>
                             <th className="px-5 py-5 text-right">Net Profit</th>
                             <th className="px-10 py-5 text-center">Action</th>
                           </tr>
@@ -1459,49 +1460,32 @@ export default function App() {
                                             <div className="text-sm font-bold text-white capitalize">
                                               {trade.direction} Position
                                             </div>
-                                            <div className="flex items-center gap-2 mt-1 text-[9px] font-black uppercase tracking-tighter">
-                                              <span className="text-blue-400">
-                                                {dayjs(trade.entryTime).format(
-                                                  "HH:mm:ss",
-                                                )}
-                                              </span>
-                                              <span className="text-slate-700">
-                                                •
-                                              </span>
-                                              <span className="text-slate-500">
-                                                {trade.units} UNITS
-                                              </span>
-                                              {trade.exitReason && (
-                                                <>
-                                                  <span className="text-slate-700">
-                                                    •
-                                                  </span>
-                                                  <span
-                                                    className={cn(
-                                                      "font-black",
-                                                      trade.exitReason === "TP"
-                                                        ? "text-emerald-500"
-                                                        : trade.exitReason ===
-                                                          "SL"
-                                                          ? "text-rose-500"
-                                                          : "text-slate-500",
-                                                    )}
-                                                  >
-                                                    {trade.exitReason}
-                                                  </span>
-                                                </>
-                                              )}
+                                            <div className="text-[10px] text-slate-500 font-black uppercase tracking-tighter mt-1">
+                                              {dayjs(trade.entryTime).format("HH:mm:ss")}
                                             </div>
                                           </div>
                                         </div>
                                       </td>
-                                      <td className="px-5 py-6 font-mono text-xs text-slate-400">
-                                        ${trade.entryPrice.toLocaleString()}
+                                      <td className="px-5 py-6">
+                                        <div className={cn("text-xs font-black uppercase", trade.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
+                                          {trade.direction} @ ${trade.entryPrice.toLocaleString()}
+                                        </div>
+                                        {trade.exitPrice && (
+                                          <div className="text-[10px] text-slate-400 mt-1">
+                                            Exited @ ${trade.exitPrice.toLocaleString()}
+                                            <span className="ml-2 opacity-50 italic">({trade.exitReason || 'Target Hit'})</span>
+                                          </div>
+                                        )}
                                       </td>
-                                      <td className="px-5 py-6 font-mono text-xs text-slate-400">
-                                        $
-                                        {trade.exitPrice?.toLocaleString() ||
-                                          "---"}
+                                      <td className="px-5 py-6">
+                                        <div className="text-[10px] font-bold text-rose-400/80">SL: ${trade.sl?.toLocaleString() || 'N/A'}</div>
+                                        <div className="text-[10px] text-slate-500 mt-0.5">Units: {trade.units?.toFixed(4) || '0'}</div>
+                                      </td>
+                                      <td className="px-5 py-6 text-center">
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                                          <Zap className="w-3 h-3 text-blue-400" />
+                                          <span className="text-xs font-black text-blue-400">{trade.trailingCount || 0}</span>
+                                        </div>
                                       </td>
                                       <td
                                         className={cn(
@@ -1851,7 +1835,7 @@ export default function App() {
                                 : "text-rose-400",
                             )}
                           >
-                            ${backtestResult.summary.totalProfit.toFixed(1)}
+                            ${backtestResult.summary.totalProfit.toFixed(4)}
                           </p>
                         </div>
                         <div className="text-right">
@@ -1859,7 +1843,7 @@ export default function App() {
                             Final Balance
                           </p>
                           <p className="text-[10px] font-bold text-white">
-                            ${backtestResult.summary.finalBalance.toFixed(1)}
+                            ${backtestResult.summary.finalBalance.toFixed(4)}
                           </p>
                         </div>
                       </div>
