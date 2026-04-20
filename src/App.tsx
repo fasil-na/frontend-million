@@ -1250,7 +1250,7 @@ export default function App() {
                       )}
                     </p>
                     <p className="text-[10px] font-bold text-slate-500 mt-1">
-                      WIN RATE: {optimizationResult.best.winRate.toFixed(1)}%
+                      WIN RATE: {optimizationResult.best.winRate.toFixed(4)}%
                     </p>
                   </div>
                   <p className="text-[10px] text-center text-slate-500 font-bold uppercase tracking-widest">
@@ -1299,7 +1299,7 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <ResultCard
                       title="Final Balance"
-                      value={`$${backtestResult.summary.finalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                      value={`$${backtestResult.summary.finalBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`}
                       icon={Database}
                       color={
                         backtestResult.summary.finalBalance >= backtestResult.summary.initialCapital
@@ -1309,7 +1309,7 @@ export default function App() {
                     />
                     <ResultCard
                       title="Total P/L"
-                      value={`$${backtestResult.summary.totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                      value={`$${backtestResult.summary.totalProfit.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`}
                       icon={TrendingUp}
                       color={
                         backtestResult?.summary?.totalProfit >= 0
@@ -1331,7 +1331,7 @@ export default function App() {
                     />
                     <ResultCard
                       title="Win Rate"
-                      value={`${backtestResult.summary.winRate.toFixed(1)}%`}
+                      value={`${backtestResult.summary.winRate.toFixed(4)}%`}
                       icon={RefreshCw}
                       color="text-blue-400"
                     />
@@ -1419,8 +1419,8 @@ export default function App() {
                                       >
                                         {data.profit >= 0 ? "+" : ""}
                                         {data.profit.toLocaleString(undefined, {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
+                                          minimumFractionDigits: 4,
+                                          maximumFractionDigits: 4,
                                         })}
                                       </div>
                                     </div>
@@ -1468,17 +1468,17 @@ export default function App() {
                                       </td>
                                       <td className="px-5 py-6">
                                         <div className={cn("text-xs font-black uppercase", trade.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
-                                          {trade.direction} @ ${trade.entryPrice.toLocaleString()}
+                                          {trade.direction} @ ${trade.entryPrice.toFixed(4)}
                                         </div>
                                         {trade.exitPrice && (
                                           <div className="text-[10px] text-slate-400 mt-1">
-                                            Exited @ ${trade.exitPrice.toLocaleString()}
+                                            Exited @ ${trade.exitPrice.toFixed(4)}
                                             <span className="ml-2 opacity-50 italic">({trade.exitReason || 'Target Hit'})</span>
                                           </div>
                                         )}
                                       </td>
                                       <td className="px-5 py-6">
-                                        <div className="text-[10px] font-bold text-rose-400/80">SL: ${trade.sl?.toLocaleString() || 'N/A'}</div>
+                                        <div className="text-[10px] font-bold text-rose-400/80">SL: ${trade.sl?.toFixed(4) || 'N/A'}</div>
                                         <div className="text-[10px] text-slate-500 mt-0.5">Units: {trade.units?.toFixed(4) || '0'}</div>
                                       </td>
                                       <td className="px-5 py-6 text-center">
@@ -1499,8 +1499,8 @@ export default function App() {
                                         {(trade.profit ?? 0).toLocaleString(
                                           undefined,
                                           {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
+                                            minimumFractionDigits: 4,
+                                            maximumFractionDigits: 4,
                                           },
                                         )}
                                       </td>
@@ -1571,10 +1571,10 @@ export default function App() {
                               <div>
                                 <p className="text-sm font-black text-white">
                                   {pair.split("-")[1]} @ $
-                                  {trade.entryPrice.toLocaleString()}
+                                  {trade.entryPrice.toFixed(4)}
                                 </p>
                                 <p className="text-[10px] font-bold text-slate-500 uppercase">
-                                  SL: ${trade.sl.toLocaleString()} | TRAILING
+                                  SL: ${trade.sl.toFixed(4)} | TRAILING
                                   ACTIVE
                                 </p>
                               </div>
@@ -1589,7 +1589,7 @@ export default function App() {
                                 )}
                               >
                                 {(trade.profit ?? 0) >= 0 ? "+" : ""}$
-                                {(trade.profit ?? 0)}
+                                {(trade.profit ?? 0).toFixed(4)}
                               </p>
                               <p className="text-[10px] font-bold text-slate-500 uppercase">
                                 LIVE P/L
