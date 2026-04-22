@@ -35,6 +35,9 @@ import {
   VolumeX,
   RefreshCw,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  History
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -65,9 +68,15 @@ interface Trade {
   executionError?: string;
   units?: number;
   sl: number;
+  initialSL?: number;
   tp?: number;
   pnlPercent?: number;
   trailingCount?: number;
+  trailingHistory?: {
+    sl: number;
+    marketPrice: number;
+    time: string;
+  }[];
   exitPrice?: number;
   profit?: number;
 }
@@ -126,14 +135,14 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-const API_BASE_URL = `/api`;
-const SOCKET_URL = `/`;
+// const API_BASE_URL = `/api`;
+// const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-// const API_BASE_URL =  "http://localhost:5001/api" 
-// const SOCKET_URL =  "http://localhost:5001"
+const API_BASE_URL =  "http://localhost:5001/api" 
+const SOCKET_URL =  "http://localhost:5001"
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
@@ -148,6 +157,7 @@ const socket = io(SOCKET_URL, {
 function TradeHistoryView() {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTrades();
@@ -238,67 +248,166 @@ function TradeHistoryView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {Array.isArray(trades) && [...trades].sort((a, b) => new Date(b.recordedAt || b.entryTime).getTime() - new Date(a.recordedAt || a.entryTime).getTime()).map(t => (
-                  <tr key={t.entryTime} className="bg-slate-900/20 hover:bg-slate-800/40 transition-colors group">
-                    <td className="px-8 py-4">
-                      <div className="text-sm font-bold text-white">{dayjs(t.entryTime).format("MMM D, YYYY")}</div>
-                      <div className="text-[10px] text-slate-500">{dayjs(t.entryTime).format("HH:mm:ss")}</div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="text-xs font-bold text-slate-300">{t.pair}</div>
-                      <div className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{t.type || 'auto'}</div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className={cn("text-xs font-black uppercase", t.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
-                        {t.direction} @ ${t.entryPrice}
-                      </div>
-                      {t.exitPrice && (
-                        <div className="text-[10px] text-slate-400">
-                          Exited @ ${t.exitPrice}
-                          <span className="ml-2 opacity-50 italic">({t.exitReason || 'Target Hit'})</span>
-                        </div>
+                {Array.isArray(trades) && [...trades].sort((a, b) => new Date(b.recordedAt || b.entryTime).getTime() - new Date(a.recordedAt || a.entryTime).getTime()).map(t => {
+                  const isExpanded = expandedTradeId === t.entryTime;
+                  return (
+                    <React.Fragment key={t.entryTime}>
+                      <tr className={cn(
+                        "transition-colors group",
+                        isExpanded ? "bg-blue-500/5" : "bg-slate-900/20 hover:bg-slate-800/40"
+                      )}>
+                        <td className="px-8 py-4">
+                          <div className="text-sm font-bold text-white">{dayjs(t.entryTime).format("MMM D, YYYY")}</div>
+                          <div className="text-[10px] text-slate-500">{dayjs(t.entryTime).format("HH:mm:ss")}</div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="text-xs font-bold text-slate-300">{t.pair}</div>
+                          <div className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{t.type || 'auto'}</div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className={cn("text-xs font-black uppercase", t.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
+                            {t.direction} @ ${t.entryPrice}
+                          </div>
+                          {t.exitPrice && (
+                            <div className="text-[10px] text-slate-400">
+                              Exited @ ${t.exitPrice}
+                              <span className="ml-2 opacity-50 italic">({t.exitReason || 'Target Hit'})</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl.toFixed(4) || 'N/A'}</div>
+                          <div className="text-[10px] text-slate-500">Units: {t.units.toFixed(4) || '0'}</div>
+                          {t.status === 'failed' && t.executionError && (
+                            <div className="mt-2 p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[9px] font-bold text-rose-400 leading-tight">
+                              Error: {t.executionError}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <button
+                            onClick={() => setExpandedTradeId(isExpanded ? null : t.entryTime)}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all active:scale-95 border",
+                              isExpanded
+                                ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                                : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
+                            )}
+                          >
+                            <Zap className={cn("w-3.5 h-3.5", isExpanded && "text-blue-300")} />
+                            <span className="text-xs font-black">{t.trailingCount || 0}</span>
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 opacity-50" /> : <ChevronDown className="w-3.5 h-3.5 opacity-50" />}
+                          </button>
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <span className={cn("text-sm font-black", (t.profit ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                            {(t.profit ?? 0) >= 0 ? '+' : ''}{(t.profit ?? 0).toFixed(4)}
+                          </span>
+                          {t.pnlPercent && (
+                            <div className={cn("text-[10px] font-bold", t.pnlPercent >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
+                              {t.pnlPercent}%
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-10 py-4 text-center">
+                          <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest",
+                            t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                              t.status === 'failed' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
+                                'bg-slate-800 text-slate-400 border border-white/5')}>
+                            {t.status}
+                          </span>
+                        </td>
+                        <td className="px-8 py-4 text-right">
+                          <button onClick={() => handleDelete(t.entryTime)} className="p-2.5 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all active:scale-90 opacity-0 group-hover:opacity-100">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-slate-950/40 border-l-2 border-blue-500/50">
+                          <td colSpan={8} className="px-8 py-6">
+                            <div className="flex flex-col gap-5">
+                              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 pb-3">
+                                <History className="w-4 h-4 text-blue-500" />
+                                Interactive Trade Lifecycle & Trailing Events
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {/* Step 0: Starting Point */}
+                                <div className="relative group">
+                                  <div className="absolute -inset-0.5 bg-gradient-to-r from-slate-800 to-slate-700 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                  <div className="relative p-4 bg-slate-900 rounded-2xl border border-white/5">
+                                    <div className="text-[10px] font-black text-slate-500 uppercase mb-2">Initial Setup</div>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[10px] text-slate-400">Entry Price</span>
+                                        <span className="text-sm font-bold text-white">${t.entryPrice.toFixed(4)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[10px] text-slate-400">Initial SL</span>
+                                        <span className="text-sm font-bold text-rose-400/80">
+                                          {t.initialSL 
+                                            ? `$${t.initialSL.toFixed(4)}` 
+                                            : (t.trailingCount === 0 || !t.trailingHistory || t.trailingHistory.length === 0)
+                                              ? `$${t.sl.toFixed(4)}`
+                                              : "Prior to Logs"
+                                          }
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Trailing Steps */}
+                                {t.trailingHistory && [...t.trailingHistory].sort((a: any, b: any) => new Date(a.time).getTime() - new Date(b.time).getTime()).map((h: any, idx: number) => (
+                                  <div key={idx} className="relative group animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
+                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                    <div className="relative p-4 bg-slate-900 rounded-2xl border border-blue-500/10">
+                                      <div className="flex justify-between items-center mb-2">
+                                        <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Trail #{idx + 1}</div>
+                                        <div className="text-[9px] font-mono text-slate-600">{dayjs(h.time).format("HH:mm:ss")}</div>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-[9px] text-slate-500">Trigger Price</span>
+                                          <span className="text-xs font-bold text-slate-300">${h.marketPrice.toFixed(4)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-[9px] text-slate-500">Updated SL</span>
+                                          <span className="text-xs font-bold text-emerald-400/90">${h.sl.toFixed(4)}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {/* Final State */}
+                                {t.status === 'closed' && (
+                                  <div className="relative group">
+                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-600/20 to-orange-600/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                    <div className="relative p-4 bg-slate-900 rounded-2xl border border-amber-500/10">
+                                      <div className="text-[10px] font-black text-amber-500 uppercase mb-2">Final Execution</div>
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-[10px] text-slate-400">Exit Price</span>
+                                          <span className="text-sm font-bold text-amber-400">${(t.exitPrice || 0).toFixed(4)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-[10px] text-slate-400">Reason</span>
+                                          <span className="text-[10px] font-bold text-slate-400">{t.exitReason || 'Target Hit'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl.toFixed(4) || 'N/A'}</div>
-                      <div className="text-[10px] text-slate-500">Units: {t.units.toFixed(4) || '0'}</div>
-                      {t.status === 'failed' && t.executionError && (
-                        <div className="mt-2 p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[9px] font-bold text-rose-400 leading-tight">
-                          Error: {t.executionError}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                        <Zap className="w-3 h-3 text-blue-400" />
-                        <span className="text-xs font-black text-blue-400">{t.trailingCount || 0}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <span className={cn("text-sm font-black", (t.profit ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                        {(t.profit ?? 0) >= 0 ? '+' : ''}{(t.profit ?? 0).toFixed(4)}
-                      </span>
-                      {t.pnlPercent && (
-                        <div className={cn("text-[10px] font-bold", t.pnlPercent >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
-                          {t.pnlPercent}%
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-10 py-4 text-center">
-                      <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest",
-                        t.status === 'open' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                          t.status === 'failed' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
-                            'bg-slate-800 text-slate-400 border border-white/5')}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td className="px-8 py-4 text-right">
-                      <button onClick={() => handleDelete(t.entryTime)} className="p-2.5 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all active:scale-90 opacity-0 group-hover:opacity-100">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -322,10 +431,8 @@ export default function App() {
   const [riskMode, setRiskMode] = useState<"minimal" | "capital">("minimal");
   const [tickerPrice, setTickerPrice] = useState<number | null>(null);
 
-  // Common Backtest State (Restored)
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [interval, setInterval] = useState("15");
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
   const [isBankruptcy, setIsBankruptcy] = useState(false);
   const [dynamicMaxLeverage, setDynamicMaxLeverage] = useState<number | null>(null);
@@ -378,6 +485,14 @@ export default function App() {
     updateBackendSettings({ leverage });
   }, [leverage]);
 
+  useEffect(() => {
+    updateBackendSettings({ maxPositionSize });
+  }, [maxPositionSize]);
+
+  useEffect(() => {
+    updateBackendSettings({ trailingSL });
+  }, [trailingSL]);
+
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(
     null,
   );
@@ -428,6 +543,8 @@ export default function App() {
       if (s.isLiveMonitoring !== undefined) setIsLiveMonitoring(s.isLiveMonitoring);
       if (s.isLiveTrading !== undefined) setIsLiveTrading(s.isLiveTrading);
       if (s.leverage !== undefined) setLeverage(s.leverage);
+      if (s.maxPositionSize !== undefined) setMaxPositionSize(s.maxPositionSize);
+      if (s.trailingSL !== undefined) setTrailingSL(s.trailingSL);
       if (s.riskMode) setRiskMode(s.riskMode);
       isSettingsLoaded.current = true;
     } catch (err) {
@@ -497,7 +614,7 @@ export default function App() {
         `${API_BASE_URL}/market/backtest`,
         {
           pair,
-          resolution: interval,
+          resolution: liveInterval,
           strategyId: selectedStrategyId,
           month: selectedMonth,
           year: selectedYear,
@@ -586,7 +703,7 @@ export default function App() {
       setOptimizationResult(response.data);
       // If we found a best config, let's update the current settings to match it
       if (response.data.best) {
-        setInterval(response.data.best.resolution);
+        setLiveInterval(response.data.best.resolution);
       }
     } catch (err) {
       console.error(err);
@@ -680,7 +797,6 @@ export default function App() {
     isLiveMonitoring,
     view,
     pair,
-    interval,
     selectedStrategyId,
     initialCapital,
     liveInterval,
@@ -755,7 +871,7 @@ export default function App() {
           <TradeViewModal
             trade={selectedTradeForView}
             pair={pair}
-            resolution={interval}
+            resolution={liveInterval}
             onClose={() => setSelectedTradeForView(null)}
             isLiveMonitoring={isLiveMonitoring}
           />
@@ -936,8 +1052,8 @@ export default function App() {
 
                       <InputGroup label="Interval" sub="Candle timeframe">
                         <select
-                          value={interval}
-                          onChange={(e) => setInterval(e.target.value)}
+                          value={liveInterval}
+                          onChange={(e) => setLiveInterval(e.target.value)}
                           className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none"
                         >
                           {["1", "5", "15", "30", "60", "D"].map((i) => (
@@ -1526,80 +1642,6 @@ export default function App() {
                 </motion.div>
               )}
 
-              {isLiveTrading &&
-                backtestResult &&
-                backtestResult.trades.filter((t) => t.status === "open")
-                  .length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-8 bg-emerald-600/10 border border-emerald-500/20 rounded-[2.5rem] space-y-6"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-emerald-500/20">
-                          <Activity className="w-5 h-5 text-emerald-400" />
-                        </div>
-                        <h3 className="text-lg font-black tracking-tight">
-                          Live Active Trades
-                        </h3>
-                      </div>
-                      <div className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest animate-pulse">
-                        Live Execution Active
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      {backtestResult.trades
-                        .filter((t) => t.status === "open")
-                        .map((trade, i) => (
-                          <div
-                            key={i}
-                            className="p-6 bg-slate-950/50 rounded-3xl border border-white/5 flex items-center justify-between"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div
-                                className={cn(
-                                  "w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs",
-                                  trade.direction === "buy"
-                                    ? "bg-emerald-500/20 text-emerald-400"
-                                    : "bg-rose-500/20 text-rose-400",
-                                )}
-                              >
-                                {trade.direction === "buy" ? "LONG" : "SHORT"}
-                              </div>
-                              <div>
-                                <p className="text-sm font-black text-white">
-                                  {pair.split("-")[1]} @ $
-                                  {trade.entryPrice.toFixed(4)}
-                                </p>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase">
-                                  SL: ${trade.sl.toFixed(4)} | TRAILING
-                                  ACTIVE
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p
-                                className={cn(
-                                  "text-lg font-black",
-                                  (trade.profit ?? 0) >= 0
-                                    ? "text-emerald-400"
-                                    : "text-rose-400",
-                                )}
-                              >
-                                {(trade.profit ?? 0) >= 0 ? "+" : ""}$
-                                {(trade.profit ?? 0).toFixed(4)}
-                              </p>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase">
-                                LIVE P/L
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  </motion.div>
-                )}
             </div>
           </motion.div>
         )}
