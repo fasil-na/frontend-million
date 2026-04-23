@@ -154,7 +154,7 @@ const socket = io(SOCKET_URL, {
 
 
 
-function TradeHistoryView() {
+function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice: number | null, currentPair: string, leverage: number }) {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
@@ -300,14 +300,43 @@ function TradeHistoryView() {
                           </button>
                         </td>
                         <td className="px-5 py-4 text-right">
-                          <span className={cn("text-sm font-black", (t.profit ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                            {(t.profit ?? 0) >= 0 ? '+' : ''}{(t.profit ?? 0).toFixed(4)}
-                          </span>
-                          {t.pnlPercent && (
-                            <div className={cn("text-[10px] font-bold", t.pnlPercent >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
-                              {t.pnlPercent}%
-                            </div>
-                          )}
+                          {(() => {
+                            const isTradeOpen = t.status === 'open';
+                            let displayProfit = t.profit ?? 0;
+                            let displayPnl = t.pnlPercent;
+
+                            const cleanTPair = (t.pair || '').replace('B-', '').toUpperCase();
+                            const cleanCPair = (currentPair || '').replace('B-', '').toUpperCase();
+
+                            if (isTradeOpen && tickerPrice && cleanTPair === cleanCPair) {
+                              const entryPrice = Number(t.entryPrice) || 0;
+                              const diff = t.direction === 'buy' ? (tickerPrice - entryPrice) : (entryPrice - tickerPrice);
+                              const units = Number(t.units) || 0;
+                              displayProfit = diff * units;
+                              displayPnl = entryPrice > 0 ? (diff / entryPrice) * 100 * (Number(leverage) || 1) : 0;
+                            }
+
+                            return (
+                              <>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span className={cn("text-sm font-black", displayProfit >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                                    {displayProfit >= 0 ? '+' : ''}{displayProfit.toFixed(4)}
+                                  </span>
+                                  {isTradeOpen && tickerPrice && cleanTPair === cleanCPair && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_8px_rgba(96,165,250,0.5)]" />
+                                      <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter">Live</span>
+                                    </div>
+                                  )}
+                                </div>
+                                {displayPnl !== undefined && (
+                                  <div className={cn("text-[10px] font-bold", displayPnl >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
+                                    {displayPnl.toFixed(2)}%
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </td>
                         <td className="px-10 py-4 text-center">
                           <span className={cn("px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest",
@@ -733,7 +762,10 @@ export default function App() {
 
       const handlePriceChange = (data: any) => {
         const rawPrice = data.p || data.price || data.last_price;
-        if (rawPrice && (!data.m || data.m === pair)) {
+        const incomingM = (data.m || '').replace('B-', '').toUpperCase();
+        const currentP = (pair || '').replace('B-', '').toUpperCase();
+
+        if (rawPrice && (incomingM === currentP || !data.m)) {
           const price = parseFloat(rawPrice);
           setTickerPrice(price);
           setCandles((prev) => {
@@ -1937,7 +1969,7 @@ export default function App() {
                               )}
                             >
                               {(trade.profit ?? 0) >= 0 ? "+" : ""}
-                              {(trade.profit ?? 0)}
+                              {(trade.profit ?? 0).toFixed(4)}
                             </span>
                           </div>
                         </div>
@@ -2028,7 +2060,7 @@ export default function App() {
                                   )}
                                 >
                                   {(trade.profit ?? 0) >= 0 ? "+" : ""}$
-                                  {(trade.profit ?? 0)}
+                                  {(trade.profit ?? 0).toFixed(4)}
                                 </p>
                                 <div className={cn(
                                   "px-2 py-0.5 rounded-md text-[8px] font-black uppercase flex items-center gap-1.5",
@@ -2082,7 +2114,7 @@ export default function App() {
 
 
         {view === "history" && (
-          <TradeHistoryView />
+          <TradeHistoryView tickerPrice={tickerPrice} currentPair={pair} leverage={leverage} />
         )}
       </main>
 
@@ -2659,7 +2691,7 @@ function TradeViewModal({
             />
             <ResultCard
               title="Execution Net Profit"
-              value={`$${(trade.profit ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              value={`$${(trade.profit ?? 0).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`}
               icon={TrendingUp}
               color={(trade.profit ?? 0) > 0 ? "text-emerald-400" : "text-rose-400"}
             />
