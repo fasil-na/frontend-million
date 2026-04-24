@@ -37,8 +37,10 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
-  History
+  History,
+  Activity as Heartbeat
 } from "lucide-react";
+import ErrorLog from "./components/ErrorLog";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -135,14 +137,14 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-const API_BASE_URL = `/api`;
-const SOCKET_URL = `/`;
+// const API_BASE_URL = `/api`;
+// const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-// const API_BASE_URL =  "http://localhost:5001/api" 
-// const SOCKET_URL =  "http://localhost:5001"
+const API_BASE_URL =  "http://localhost:5001/api" 
+const SOCKET_URL =  "http://localhost:5001"
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
@@ -447,7 +449,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
 }
 
 export default function App() {
-  const [view, setView] = useState<"backtest" | "trade" | "history">(
+  const [view, setView] = useState<"backtest" | "trade" | "history" | "logs">(
     "trade",
   );
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -948,6 +950,12 @@ export default function App() {
               onClick={() => setView("history")}
               icon={Database}
               label="Trades"
+            />
+            <ViewToggle
+              active={view === "logs"}
+              onClick={() => setView("logs")}
+              icon={Heartbeat}
+              label="Logs"
             />
           </div>
 
@@ -2115,6 +2123,10 @@ export default function App() {
 
         {view === "history" && (
           <TradeHistoryView tickerPrice={tickerPrice} currentPair={pair} leverage={leverage} />
+        )}
+
+        {view === "logs" && (
+          <ErrorLog />
         )}
       </main>
 
