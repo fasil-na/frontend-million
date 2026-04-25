@@ -137,14 +137,14 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-const API_BASE_URL = `/api`;
-const SOCKET_URL = `/`;
+// const API_BASE_URL = `/api`;
+// const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-// const API_BASE_URL =  "http://localhost:5001/api" 
-// const SOCKET_URL =  "http://localhost:5001"
+const API_BASE_URL = "http://localhost:5001/api"
+const SOCKET_URL = "http://localhost:5001"
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
@@ -377,8 +377,8 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                       <div className="flex justify-between items-center">
                                         <span className="text-[10px] text-slate-400">Initial SL</span>
                                         <span className="text-sm font-bold text-rose-400/80">
-                                          {t.initialSL 
-                                            ? `$${t.initialSL.toFixed(4)}` 
+                                          {t.initialSL
+                                            ? `$${t.initialSL.toFixed(4)}`
                                             : (t.trailingCount === 0 || !t.trailingHistory || t.trailingHistory.length === 0)
                                               ? `$${t.sl.toFixed(4)}`
                                               : "Prior to Logs"
