@@ -462,8 +462,8 @@ export default function App() {
   const [riskMode, setRiskMode] = useState<"minimal" | "capital">("minimal");
   const [tickerPrice, setTickerPrice] = useState<number | null>(null);
 
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [startDate, setStartDate] = useState(dayjs().startOf("month").format("YYYY-MM-DD"));
+  const [endDate, setEndDate] = useState(dayjs().format("YYYY-MM-DD"));
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
   const [isBankruptcy, setIsBankruptcy] = useState(false);
   const [dynamicMaxLeverage, setDynamicMaxLeverage] = useState<number | null>(null);
@@ -534,6 +534,8 @@ export default function App() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selectedTradeForView, setSelectedTradeForView] =
     useState<Trade | null>(null);
+  const [expandedBacktestTradeId, setExpandedBacktestTradeId] =
+    useState<string | null>(null);
   const [selectedTradeForChart, setSelectedTradeForChart] =
     useState<Trade | null>(null);
   const [configTab, setConfigTab] = useState<"manual" | "optimize">("manual");
@@ -647,8 +649,8 @@ export default function App() {
           pair,
           resolution: liveInterval,
           strategyId: selectedStrategyId,
-          month: selectedMonth,
-          year: selectedYear,
+          startDate,
+          endDate,
           capital: initialCapital,
           maxPositionSize,
           leverage,
@@ -1044,48 +1046,21 @@ export default function App() {
                     >
                       {!isLiveMonitoring && (
                         <div className="grid grid-cols-2 gap-4">
-                          <InputGroup label="Year" sub="Target year">
-                            <select
-                              value={selectedYear}
-                              onChange={(e) =>
-                                setSelectedYear(Number(e.target.value))
-                              }
-                              className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none"
-                            >
-                              {[2021, 2022, 2023, 2024, 2025, 2026].map((y) => (
-                                <option key={y} value={y}>
-                                  {y}
-                                </option>
-                              ))}
-                            </select>
+                          <InputGroup label="Start Date" sub="Target start">
+                            <input
+                              type="date"
+                              value={startDate}
+                              onChange={(e) => setStartDate(e.target.value)}
+                              className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none [color-scheme:dark]"
+                            />
                           </InputGroup>
-                          <InputGroup label="Month" sub="Target month">
-                            <select
-                              value={selectedMonth}
-                              onChange={(e) =>
-                                setSelectedMonth(Number(e.target.value))
-                              }
-                              className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none"
-                            >
-                              {[
-                                "Jan",
-                                "Feb",
-                                "Mar",
-                                "Apr",
-                                "May",
-                                "Jun",
-                                "Jul",
-                                "Aug",
-                                "Sep",
-                                "Oct",
-                                "Nov",
-                                "Dec",
-                              ].map((m, i) => (
-                                <option key={m} value={i}>
-                                  {m}
-                                </option>
-                              ))}
-                            </select>
+                          <InputGroup label="End Date" sub="Target end">
+                            <input
+                              type="date"
+                              value={endDate}
+                              onChange={(e) => setEndDate(e.target.value)}
+                              className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none [color-scheme:dark]"
+                            />
                           </InputGroup>
                         </div>
                       )}
@@ -1591,88 +1566,186 @@ export default function App() {
                                       dayjs(b.entryTime).valueOf() -
                                       dayjs(a.entryTime).valueOf(),
                                   )
-                                  .map((trade, idx) => (
-                                    <tr
-                                      key={`${day}-${idx}`}
-                                      className="group hover:bg-white/[0.02] transition-colors border-b border-white/5 last:border-0"
-                                    >
-                                      <td className="px-8 py-6">
-                                        <div className="flex items-center gap-4">
-                                          <div
-                                            className={cn(
-                                              "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all",
-                                              trade.direction === "buy"
-                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                                                : "bg-rose-500/10 border-rose-500/20 text-rose-400",
-                                            )}
-                                          >
-                                            {trade.direction === "buy" ? (
-                                              <TrendingUp className="w-5 h-5" />
-                                            ) : (
-                                              <TrendingDown className="w-5 h-5" />
-                                            )}
-                                          </div>
-                                          <div>
-                                            <div className="text-sm font-bold text-white capitalize">
-                                              {trade.direction} Position
-                                            </div>
-                                            <div className="text-[10px] text-slate-500 font-black uppercase tracking-tighter mt-1">
-                                              {dayjs(trade.entryTime).format("HH:mm:ss")}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </td>
-                                      <td className="px-5 py-6">
-                                        <div className={cn("text-xs font-black uppercase", trade.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
-                                          {trade.direction} @ ${trade.entryPrice.toFixed(4)}
-                                        </div>
-                                        {trade.exitPrice && (
-                                          <div className="text-[10px] text-slate-400 mt-1">
-                                            Exited @ ${trade.exitPrice.toFixed(4)}
-                                            <span className="ml-2 opacity-50 italic">({trade.exitReason || 'Target Hit'})</span>
-                                          </div>
-                                        )}
-                                      </td>
-                                      <td className="px-5 py-6">
-                                        <div className="text-[10px] font-bold text-rose-400/80">SL: ${trade.sl?.toFixed(4) || 'N/A'}</div>
-                                        <div className="text-[10px] text-slate-500 mt-0.5">Units: {trade.units?.toFixed(4) || '0'}</div>
-                                      </td>
-                                      <td className="px-5 py-6 text-center">
-                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                                          <Zap className="w-3 h-3 text-blue-400" />
-                                          <span className="text-xs font-black text-blue-400">{trade.trailingCount || 0}</span>
-                                        </div>
-                                      </td>
-                                      <td
+                                  .map((trade, idx) => {
+                                    const isExpanded = expandedBacktestTradeId === trade.entryTime;
+                                    return (
+                                    <React.Fragment key={`${day}-${idx}`}>
+                                      <tr
                                         className={cn(
-                                          "px-5 py-6 text-right font-black text-sm",
-                                          (trade.profit ?? 0) > 0
-                                            ? "text-emerald-400"
-                                            : "text-rose-400",
+                                          "group transition-colors border-b border-white/5 last:border-0",
+                                          isExpanded ? "bg-blue-500/5" : "hover:bg-white/[0.02]"
                                         )}
                                       >
-                                        {(trade.profit ?? 0) > 0 ? "+" : ""}
-                                        {(trade.profit ?? 0).toLocaleString(
-                                          undefined,
-                                          {
-                                            minimumFractionDigits: 4,
-                                            maximumFractionDigits: 4,
-                                          },
-                                        )}
-                                      </td>
-                                      <td className="px-10 py-6 text-center">
-                                        <button
-                                          onClick={() =>
-                                            setSelectedTradeForView(trade)
-                                          }
-                                          className="p-3 rounded-xl bg-slate-800 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 border border-white/5 transition-all shadow-lg active:scale-95"
-                                          title="View on Chart"
+                                        <td className="px-8 py-6">
+                                          <div className="flex items-center gap-4">
+                                            <div
+                                              className={cn(
+                                                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border transition-all",
+                                                trade.direction === "buy"
+                                                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                                  : "bg-rose-500/10 border-rose-500/20 text-rose-400",
+                                              )}
+                                            >
+                                              {trade.direction === "buy" ? (
+                                                <TrendingUp className="w-5 h-5" />
+                                              ) : (
+                                                <TrendingDown className="w-5 h-5" />
+                                              )}
+                                            </div>
+                                            <div>
+                                              <div className="text-sm font-bold text-white capitalize">
+                                                {trade.direction} Position
+                                              </div>
+                                              <div className="text-[10px] text-slate-500 font-black uppercase tracking-tighter mt-1">
+                                                {dayjs(trade.entryTime).format("HH:mm:ss")}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="px-5 py-6">
+                                          <div className={cn("text-xs font-black uppercase", trade.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
+                                            {trade.direction} @ ${trade.entryPrice.toFixed(4)}
+                                          </div>
+                                          {trade.exitPrice && (
+                                            <div className="text-[10px] text-slate-400 mt-1">
+                                              Exited @ ${trade.exitPrice.toFixed(4)}
+                                              <span className="ml-2 opacity-50 italic">({trade.exitReason || 'Target Hit'})</span>
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td className="px-5 py-6">
+                                          <div className="text-[10px] font-bold text-rose-400/80">SL: ${trade.sl?.toFixed(4) || 'N/A'}</div>
+                                          <div className="text-[10px] text-slate-500 mt-0.5">Units: {trade.units?.toFixed(4) || '0'}</div>
+                                        </td>
+                                        <td className="px-5 py-6 text-center">
+                                          <button
+                                            onClick={() => setExpandedBacktestTradeId(isExpanded ? null : trade.entryTime)}
+                                            className={cn(
+                                              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all active:scale-95 border",
+                                              isExpanded
+                                                ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                                                : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
+                                            )}
+                                          >
+                                            <Zap className={cn("w-3.5 h-3.5", isExpanded && "text-blue-300")} />
+                                            <span className="text-xs font-black">{trade.trailingCount || 0}</span>
+                                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 opacity-50" /> : <ChevronDown className="w-3.5 h-3.5 opacity-50" />}
+                                          </button>
+                                        </td>
+                                        <td
+                                          className={cn(
+                                            "px-5 py-6 text-right font-black text-sm",
+                                            (trade.profit ?? 0) > 0
+                                              ? "text-emerald-400"
+                                              : "text-rose-400",
+                                          )}
                                         >
-                                          <Eye className="w-5 h-5" />
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
+                                          {(trade.profit ?? 0) > 0 ? "+" : ""}
+                                          {(trade.profit ?? 0).toLocaleString(
+                                            undefined,
+                                            {
+                                              minimumFractionDigits: 4,
+                                              maximumFractionDigits: 4,
+                                            },
+                                          )}
+                                        </td>
+                                        <td className="px-10 py-6 text-center">
+                                          <button
+                                            onClick={() =>
+                                              setSelectedTradeForView(trade)
+                                            }
+                                            className="p-3 rounded-xl bg-slate-800 hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 border border-white/5 transition-all shadow-lg active:scale-95"
+                                            title="View on Chart"
+                                          >
+                                            <Eye className="w-5 h-5" />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                      {isExpanded && (
+                                        <tr className="bg-slate-950/40 border-l-2 border-blue-500/50">
+                                          <td colSpan={6} className="px-8 py-6">
+                                            <div className="flex flex-col gap-5">
+                                              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 pb-3">
+                                                <History className="w-4 h-4 text-blue-500" />
+                                                Interactive Trade Lifecycle & Trailing Events
+                                              </div>
+
+                                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                {/* Step 0: Starting Point */}
+                                                <div className="relative group">
+                                                  <div className="absolute -inset-0.5 bg-gradient-to-r from-slate-800 to-slate-700 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                                  <div className="relative p-4 bg-slate-900 rounded-2xl border border-white/5">
+                                                    <div className="text-[10px] font-black text-slate-500 uppercase mb-2">Initial Setup</div>
+                                                    <div className="space-y-2">
+                                                      <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] text-slate-400">Entry Price</span>
+                                                        <span className="text-sm font-bold text-white">${trade.entryPrice.toFixed(4)}</span>
+                                                      </div>
+                                                      <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] text-slate-400">Initial SL</span>
+                                                        <span className="text-sm font-bold text-rose-400/80">
+                                                          {trade.initialSL
+                                                            ? `$${trade.initialSL.toFixed(4)}`
+                                                            : (trade.trailingCount === 0 || !trade.trailingHistory || trade.trailingHistory.length === 0)
+                                                              ? `$${trade.sl?.toFixed(4)}`
+                                                              : "Prior to Logs"
+                                                          }
+                                                        </span>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                </div>
+
+                                                {/* Trailing Steps */}
+                                                {trade.trailingHistory && [...trade.trailingHistory].sort((a: any, b: any) => new Date(a.time).getTime() - new Date(b.time).getTime()).map((h: any, idx: number) => (
+                                                  <div key={idx} className="relative group animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
+                                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                                    <div className="relative p-4 bg-slate-900 rounded-2xl border border-blue-500/10">
+                                                      <div className="flex justify-between items-center mb-2">
+                                                        <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Trail #{idx + 1}</div>
+                                                        <div className="text-[9px] font-mono text-slate-600">{dayjs(h.time).format("HH:mm:ss")}</div>
+                                                      </div>
+                                                      <div className="space-y-1">
+                                                        <div className="flex justify-between items-center">
+                                                          <span className="text-[9px] text-slate-500">Trigger</span>
+                                                          <span className="text-xs font-bold text-slate-300">${h.marketPrice.toFixed(4)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                          <span className="text-[9px] text-slate-500">Updated SL</span>
+                                                          <span className="text-xs font-bold text-emerald-400/90">${h.sl.toFixed(4)}</span>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                ))}
+
+                                                {/* Final State */}
+                                                {trade.status === 'closed' && (
+                                                  <div className="relative group">
+                                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-600/20 to-orange-600/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                                    <div className="relative p-4 bg-slate-900 rounded-2xl border border-amber-500/10">
+                                                      <div className="text-[10px] font-black text-amber-500 uppercase mb-2">Final Execution</div>
+                                                      <div className="space-y-1">
+                                                        <div className="flex justify-between items-center">
+                                                          <span className="text-[10px] text-slate-400">Exit Price</span>
+                                                          <span className="text-sm font-bold text-amber-400">${(trade.exitPrice || 0).toFixed(4)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                          <span className="text-[10px] text-slate-400">Reason</span>
+                                                          <span className="text-[10px] font-bold text-slate-400">{trade.exitReason || 'Target Hit'}</span>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </React.Fragment>
+                                    );
+                                  })}
                               </React.Fragment>
                             ))}
                         </tbody>
