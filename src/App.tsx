@@ -401,7 +401,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage, backtestTimezone
                                     <div className="relative p-4 bg-slate-900 rounded-2xl border border-blue-500/10">
                                       <div className="flex justify-between items-center mb-2">
                                         <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Trail #{idx + 1}</div>
-                                          <div className="text-[9px] font-mono text-slate-600">{dayjs(h.time).tz(backtestTimezone === 'IST' ? 'Asia/Kolkata' : 'UTC').format("HH:mm:ss")}</div>
+                                        <div className="text-[9px] font-mono text-slate-600">{dayjs(h.time).tz(backtestTimezone === 'IST' ? 'Asia/Kolkata' : 'UTC').format("HH:mm:ss")}</div>
                                       </div>
                                       <div className="space-y-1">
                                         <div className="flex justify-between items-center">
@@ -474,6 +474,15 @@ export default function App() {
   const [isBankruptcy, setIsBankruptcy] = useState(false);
   const [dynamicMaxLeverage, setDynamicMaxLeverage] = useState<number | null>(null);
   const isSettingsLoaded = useRef(false);
+
+  useEffect(() => {
+    if (pair === "B-XAU_USDT") {
+      setSelectedStrategyId("gold-opening-breakout");
+    } else if (selectedStrategyId === "gold-opening-breakout") {
+      setSelectedStrategyId("opening-breakout");
+    }
+  }, [pair]);
+
 
   // Persistence Effects (Sync with Backend)
   const updateBackendSettings = async (updates: any) => {
@@ -659,7 +668,7 @@ export default function App() {
           endDate,
           capital: initialCapital,
           maxPositionSize,
-           leverage,
+          leverage,
           trailingSL,
           timezone: backtestTimezone,
           isLive: isLiveMonitoring,
@@ -1831,8 +1840,8 @@ export default function App() {
                     {[
                       "B-BTC_USDT",
                       "B-ETH_USDT",
-                      "B-SUSHI_USDT"
-
+                      "B-SUSHI_USDT",
+                      "B-XAU_USDT",
                     ].map((p) => (
                       <button
                         key={p}
