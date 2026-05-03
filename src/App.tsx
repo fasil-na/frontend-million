@@ -43,9 +43,11 @@ import {
   ChevronDown,
   ChevronUp,
   History,
-  Activity as Heartbeat
+  Activity as Heartbeat,
+  Calendar
 } from "lucide-react";
 import ErrorLog from "./components/ErrorLog";
+import { DailyAnalysisView } from "./components/DailyAnalysisView";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -99,6 +101,7 @@ interface BacktestResponse {
     initialCapital: number;
     finalBalance: number;
   };
+  dailyRecords?: any[];
 }
 
 interface OptimizationResponse {
@@ -454,7 +457,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage, backtestTimezone
 }
 
 export default function App() {
-  const [view, setView] = useState<"backtest" | "trade" | "history" | "logs">(
+  const [view, setView] = useState<"backtest" | "trade" | "history" | "logs" | "daily">(
     "trade",
   );
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -475,13 +478,7 @@ export default function App() {
   const [dynamicMaxLeverage, setDynamicMaxLeverage] = useState<number | null>(null);
   const isSettingsLoaded = useRef(false);
 
-  useEffect(() => {
-    if (pair === "B-XAU_USDT") {
-      setSelectedStrategyId("gold-opening-breakout");
-    } else if (selectedStrategyId === "gold-opening-breakout") {
-      setSelectedStrategyId("opening-breakout");
-    }
-  }, [pair]);
+  // Removed hardcoded pair-strategy relationships to allow all pairs to use any strategy
 
 
   // Persistence Effects (Sync with Backend)
@@ -926,6 +923,7 @@ export default function App() {
             resolution={liveInterval}
             onClose={() => setSelectedTradeForView(null)}
             isLiveMonitoring={isLiveMonitoring}
+            backtestTimezone={backtestTimezone}
           />
         )}
       </AnimatePresence>
@@ -968,6 +966,12 @@ export default function App() {
               onClick={() => setView("history")}
               icon={Database}
               label="Trades"
+            />
+            <ViewToggle
+              active={view === "daily"}
+              onClick={() => setView("daily")}
+              icon={Calendar}
+              label="Daily"
             />
             <ViewToggle
               active={view === "logs"}
@@ -2243,6 +2247,13 @@ export default function App() {
           <TradeHistoryView tickerPrice={tickerPrice} currentPair={pair} leverage={leverage} backtestTimezone={backtestTimezone} />
         )}
 
+        {view === "daily" && (
+          <DailyAnalysisView 
+            currentPair={pair}
+            onViewTrade={(t) => setSelectedTradeForView(t)}
+          />
+        )}
+
         {view === "logs" && (
           <ErrorLog />
         )}
@@ -2289,6 +2300,9 @@ function LiveMarketChart({
   const lowSeriesRef = useRef<any>(null);
   const slLineRef = useRef<any>(null);
   const tpLineRef = useRef<any>(null);
+  const entryLineRef = useRef<any>(null);
+  const rangeHighLineRef = useRef<any>(null);
+  const rangeLowLineRef = useRef<any>(null);
   const tradeHighlightSeriesRef = useRef<any>(null);
 
   useEffect(() => {
@@ -2390,6 +2404,36 @@ function LiveMarketChart({
         close: c.close,
       }));
 
+    const tradesToMark = selectedTrade ? [selectedTrade] : trades;
+    
+    tradesToMark.forEach((trade) => {
+      const rawEntryTime = Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
+      let entryIdx = 0;
+      for (let i = 0; i < sortedData.length; i++) {
+          if (sortedData[i].time <= rawEntryTime) entryIdx = i;
+          else break;
+      }
+      
+      if (sortedData[entryIdx]) {
+          (sortedData[entryIdx] as any).color = "#eab308"; // yellow-500
+          (sortedData[entryIdx] as any).wickColor = "#eab308";
+      }
+
+      if (trade.exitTime) {
+          const rawExitTime = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
+          let exitIdx = 0;
+          for (let i = 0; i < sortedData.length; i++) {
+              if (sortedData[i].time <= rawExitTime) exitIdx = i;
+              else break;
+          }
+          
+          if (sortedData[exitIdx]) {
+              (sortedData[exitIdx] as any).color = "#8b5cf6"; // violet-500
+              (sortedData[exitIdx] as any).wickColor = "#8b5cf6";
+          }
+      }
+    });
+
     if (sortedData.length > 0) {
       candleSeriesRef.current.setData(sortedData);
 
@@ -2423,44 +2467,58 @@ function LiveMarketChart({
 
     // Add markers for trades
     const markers: any[] = [];
-    const tradesToMark = selectedTrade ? [selectedTrade] : trades;
 
     tradesToMark.forEach((trade) => {
-      const entryTime =
-        Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
-      markers.push({
-        time: entryTime,
-        position: trade.direction === "buy" ? "belowBar" : "aboveBar",
-        color: trade.direction === "buy" ? "#10b981" : "#ef4444",
-        shape: trade.direction === "buy" ? "arrowUp" : "arrowDown",
-        text: `ENTRY ${trade.direction.toUpperCase()} @ ${trade.entryPrice}`,
-        size: 2,
-      });
-
-      if (trade.status === "open") {
-        // Highlight active trade with a special marker
+      const rawEntryTime = Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
+      let closestEntryCandle = sortedData[0];
+      for (const c of sortedData) {
+          if (c.time <= rawEntryTime) closestEntryCandle = c;
+          else break;
+      }
+      
+      if (closestEntryCandle) {
         markers.push({
-          time: entryTime,
+          time: closestEntryCandle.time,
           position: trade.direction === "buy" ? "belowBar" : "aboveBar",
-          color: "#3b82f6",
-          shape: "circle",
-          text: "ACTIVE",
+          color: trade.direction === "buy" ? "#10b981" : "#ef4444",
+          shape: trade.direction === "buy" ? "arrowUp" : "arrowDown",
+          text: `ENTRY ${trade.direction.toUpperCase()} @ ${trade.entryPrice}`,
+          size: 2,
         });
+
+        if (trade.status === "open") {
+          markers.push({
+            time: closestEntryCandle.time,
+            position: trade.direction === "buy" ? "belowBar" : "aboveBar",
+            color: "#3b82f6",
+            shape: "circle",
+            text: "ACTIVE",
+          });
+        }
       }
 
       if (trade.exitTime) {
-        const exitTime =
-          Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
-        markers.push({
-          time: exitTime,
-          position: trade.direction === "buy" ? "aboveBar" : "belowBar",
-          color: "#94a3b8",
-          shape: trade.direction === "buy" ? "arrowDown" : "arrowUp",
-          text: `EXIT ${trade.exitReason || ""} @ ${trade.exitPrice || "---"}`,
-          size: 2,
-        });
+        const rawExitTime = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
+        let closestExitCandle = sortedData[0];
+        for (const c of sortedData) {
+            if (c.time <= rawExitTime) closestExitCandle = c;
+            else break;
+        }
+
+        if (closestExitCandle) {
+          markers.push({
+            time: closestExitCandle.time,
+            position: trade.direction === "buy" ? "aboveBar" : "belowBar",
+            color: "#94a3b8",
+            shape: trade.direction === "buy" ? "arrowDown" : "arrowUp",
+            text: `EXIT ${trade.exitReason || ""} @ ${trade.exitPrice || "---"}`,
+            size: 2,
+          });
+        }
       }
     });
+
+    markers.sort((a, b) => a.time - b.time);
 
     if (
       candleSeriesRef.current &&
@@ -2476,8 +2534,8 @@ function LiveMarketChart({
       }
     }
 
-    // Add SL/TP Lines for the latest active trade
-    const activeTrade = trades?.find((t) => t.status === "open");
+    // Add Entry/SL/TP Lines for the relevant trade
+    const tradeForLines = selectedTrade || trades?.find((t) => t.status === "open");
     if (candleSeriesRef.current) {
       // Clear existing lines
       if (slLineRef.current) {
@@ -2488,25 +2546,72 @@ function LiveMarketChart({
         candleSeriesRef.current.removePriceLine(tpLineRef.current);
         tpLineRef.current = null;
       }
+      if (entryLineRef.current) {
+        candleSeriesRef.current.removePriceLine(entryLineRef.current);
+        entryLineRef.current = null;
+      }
+      if (rangeHighLineRef.current) {
+        candleSeriesRef.current.removePriceLine(rangeHighLineRef.current);
+        rangeHighLineRef.current = null;
+      }
+      if (rangeLowLineRef.current) {
+        candleSeriesRef.current.removePriceLine(rangeLowLineRef.current);
+        rangeLowLineRef.current = null;
+      }
 
-      if (activeTrade) {
-        slLineRef.current = candleSeriesRef.current.createPriceLine({
-          price: activeTrade.sl,
-          color: "#ef4444",
+      if (tradeForLines) {
+        // Range High/Low Lines
+        if (tradeForLines.rangeHigh) {
+          rangeHighLineRef.current = candleSeriesRef.current.createPriceLine({
+            price: tradeForLines.rangeHigh,
+            color: "#f59e0b",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "Range High",
+          });
+        }
+        if (tradeForLines.rangeLow) {
+          rangeLowLineRef.current = candleSeriesRef.current.createPriceLine({
+            price: tradeForLines.rangeLow,
+            color: "#f59e0b",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "Range Low",
+          });
+        }
+        // ENTRY Line
+        entryLineRef.current = candleSeriesRef.current.createPriceLine({
+          price: tradeForLines.entryPrice,
+          color: "#3b82f6", // Blue for entry
           lineWidth: 2,
-          lineStyle: LineStyle.Dashed,
+          lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: `SL: ${activeTrade.sl}`,
+          title: `ENTRY: ${tradeForLines.entryPrice}`,
         });
 
-        if (activeTrade.tp) {
+        // SL Line
+        if (tradeForLines.sl) {
+          slLineRef.current = candleSeriesRef.current.createPriceLine({
+            price: tradeForLines.sl,
+            color: "#ef4444",
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `SL: ${tradeForLines.sl}`,
+          });
+        }
+
+        // TP Line
+        if (tradeForLines.tp) {
           tpLineRef.current = candleSeriesRef.current.createPriceLine({
-            price: activeTrade.tp,
+            price: tradeForLines.tp,
             color: "#10b981",
             lineWidth: 2,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: `TP: ${activeTrade.tp}`,
+            title: `TP: ${tradeForLines.tp}`,
           });
         }
       }
@@ -2580,12 +2685,14 @@ function TradeViewModal({
   resolution,
   onClose,
   isLiveMonitoring,
+  backtestTimezone,
 }: {
   trade: Trade;
   pair: string;
   resolution: string;
   onClose: () => void;
   isLiveMonitoring: boolean;
+  backtestTimezone: "UTC" | "IST";
 }) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
@@ -2614,7 +2721,7 @@ function TradeViewModal({
             : Math.floor(Date.now() / 1000);
 
         const response = await axios.get<ApiResponse>(
-          `${API_BASE_URL}/market-data`,
+          `${API_BASE_URL}/market/market-data`,
           {
             params: {
               pair,
@@ -2663,22 +2770,49 @@ function TradeViewModal({
         const exitT = trade.exitTime ? dayjs(trade.exitTime).valueOf() : null;
         const istOffset = 5.5 * 60 * 60; // 5 hours 30 mins in seconds
 
+        if (!response.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+          console.warn("[Modal] No candle data returned from API.");
+          setLoading(false);
+          return;
+        }
+
         const sortedData = [...response.data.data]
           .sort((a, b) => a.time - b.time)
           .map((c) => {
-            const isEntry = Math.abs(c.time - entryT) < 1000;
-            const isExit = exitT && Math.abs(c.time - exitT) < 1000;
-
             return {
               time: (Math.floor(c.time / 1000) + istOffset) as any,
               open: c.open,
               high: c.high,
               low: c.low,
               close: c.close,
-              color: isEntry ? "#a78bfa" : isExit ? "#f472b6" : undefined,
-              wickColor: isEntry ? "#a78bfa" : isExit ? "#f472b6" : undefined,
             };
           });
+
+        const rawEntryTime = Math.floor(entryT / 1000) + istOffset;
+        let entryIdx = 0;
+        for (let i = 0; i < sortedData.length; i++) {
+            if (sortedData[i].time <= rawEntryTime) entryIdx = i;
+            else break;
+        }
+        
+        if (sortedData[entryIdx]) {
+            (sortedData[entryIdx] as any).color = "#eab308"; // yellow
+            (sortedData[entryIdx] as any).wickColor = "#eab308";
+        }
+
+        if (exitT) {
+            const rawExitTime = Math.floor(exitT / 1000) + istOffset;
+            let exitIdx = 0;
+            for (let i = 0; i < sortedData.length; i++) {
+                if (sortedData[i].time <= rawExitTime) exitIdx = i;
+                else break;
+            }
+            
+            if (sortedData[exitIdx]) {
+                (sortedData[exitIdx] as any).color = "#8b5cf6"; // violet
+                (sortedData[exitIdx] as any).wickColor = "#8b5cf6";
+            }
+        }
 
         candleSeries.setData(sortedData);
 
@@ -2713,6 +2847,28 @@ function TradeViewModal({
           title: "Entry",
         });
 
+        if (trade.sl) {
+          candleSeries.createPriceLine({
+            price: trade.sl,
+            color: "#ef4444",
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `SL: ${trade.sl}`,
+          });
+        }
+
+        if (trade.tp) {
+          candleSeries.createPriceLine({
+            price: trade.tp,
+            color: "#10b981",
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `TP: ${trade.tp}`,
+          });
+        }
+
         if (trade.exitPrice) {
           candleSeries.createPriceLine({
             price: trade.exitPrice,
@@ -2725,27 +2881,54 @@ function TradeViewModal({
         }
 
         const markers: any[] = [];
-        markers.push({
-          time: Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset,
-          position: trade.direction === "buy" ? "belowBar" : "aboveBar",
-          color: "#a78bfa",
-          shape: trade.direction === "buy" ? "arrowUp" : "arrowDown",
-          text: `ENTER`,
-        });
+        
+        const entryTimeUnix = Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
+        let closestEntryCandle = sortedData[0];
+        for (const c of sortedData) {
+            if (c.time <= entryTimeUnix) closestEntryCandle = c;
+            else break;
+        }
 
-        if (trade.exitTime) {
+        if (closestEntryCandle) {
           markers.push({
-            time:
-              Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset,
-            position: trade.direction === "buy" ? "aboveBar" : "belowBar",
-            color: "#f472b6",
-            shape: trade.direction === "buy" ? "arrowDown" : "arrowUp",
-            text: `EXIT`,
+            time: closestEntryCandle.time,
+            position: trade.direction === "buy" ? "belowBar" : "aboveBar",
+            color: "#eab308", // yellow
+            shape: trade.direction === "buy" ? "arrowUp" : "arrowDown",
+            text: `ENTRY @ ${trade.entryPrice}`,
           });
         }
 
+        if (trade.exitTime) {
+          const exitTimeUnix = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
+          let closestExitCandle = sortedData[0];
+          for (const c of sortedData) {
+              if (c.time <= exitTimeUnix) closestExitCandle = c;
+              else break;
+          }
+
+          if (closestExitCandle) {
+            markers.push({
+              time: closestExitCandle.time,
+              position: trade.direction === "buy" ? "aboveBar" : "belowBar",
+              color: "#8b5cf6", // violet
+              shape: trade.direction === "buy" ? "arrowDown" : "arrowUp",
+              text: `EXIT @ ${trade.exitPrice}`,
+            });
+          }
+        }
+
+        // Sort markers by time as required by lightweight-charts
+        markers.sort((a, b) => a.time - b.time);
+        
         candleSeries.setMarkers(markers);
-        chart.timeScale().fitContent();
+        
+        const timeScale = chart.timeScale();
+        timeScale.setVisibleRange({
+            from: (entryTimeUnix - (10 * 60 * 60)) as any, 
+            to: (entryTimeUnix + (10 * 60 * 60)) as any,  
+        });
+
         setLoading(false);
       } catch (err) {
         console.error(err);
