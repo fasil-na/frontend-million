@@ -164,7 +164,7 @@ const socket = io(SOCKET_URL, {
 
 
 
-function TradeHistoryView({ tickerPrice, currentPair, leverage, backtestTimezone }: { tickerPrice: number | null, currentPair: string, leverage: number, backtestTimezone: "UTC" | "IST" }) {
+function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice: number | null, currentPair: string, leverage: number }) {
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
@@ -267,8 +267,8 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage, backtestTimezone
                         isExpanded ? "bg-blue-500/5" : "bg-slate-900/20 hover:bg-slate-800/40"
                       )}>
                         <td className="px-8 py-4">
-                          <div className="text-sm font-bold text-white">{dayjs(t.entryTime).tz(backtestTimezone === 'IST' ? 'Asia/Kolkata' : 'UTC').format("MMM D, YYYY")}</div>
-                          <div className="text-[10px] text-slate-500">{dayjs(t.entryTime).tz(backtestTimezone === 'IST' ? 'Asia/Kolkata' : 'UTC').format("HH:mm:ss")} {backtestTimezone}</div>
+                          <div className="text-sm font-bold text-white">{dayjs(t.entryTime).tz('Asia/Kolkata').format("MMM D, YYYY")}</div>
+                          <div className="text-[10px] text-slate-500">{dayjs(t.entryTime).tz('Asia/Kolkata').format("HH:mm:ss")} IST</div>
                         </td>
                         <td className="px-5 py-4">
                           <div className="text-xs font-bold text-slate-300">{t.pair}</div>
@@ -404,7 +404,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage, backtestTimezone
                                     <div className="relative p-4 bg-slate-900 rounded-2xl border border-blue-500/10">
                                       <div className="flex justify-between items-center mb-2">
                                         <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Trail #{idx + 1}</div>
-                                        <div className="text-[9px] font-mono text-slate-600">{dayjs(h.time).tz(backtestTimezone === 'IST' ? 'Asia/Kolkata' : 'UTC').format("HH:mm:ss")}</div>
+                                        <div className="text-[9px] font-mono text-slate-600">{dayjs(h.time).tz('Asia/Kolkata').format("HH:mm:ss")} IST</div>
                                       </div>
                                       <div className="space-y-1">
                                         <div className="flex justify-between items-center">
@@ -2244,7 +2244,7 @@ export default function App() {
 
 
         {view === "history" && (
-          <TradeHistoryView tickerPrice={tickerPrice} currentPair={pair} leverage={leverage} backtestTimezone={backtestTimezone} />
+          <TradeHistoryView tickerPrice={tickerPrice} currentPair={pair} leverage={leverage} />
         )}
 
         {view === "daily" && (
