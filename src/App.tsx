@@ -145,14 +145,14 @@ interface Strategy {
 // Replace with your AWS Elastic Beanstalk or EC2 Public IP / Domain
 // const SERVER_HOST = "million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com";
 
-// const API_BASE_URL = `/api`;
-// const SOCKET_URL = `/`;
+const API_BASE_URL = `/api`;
+const SOCKET_URL = `/`;
 
 // const API_BASE_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com/api`;
 // const SOCKET_URL = `http://million-dollar-env.eba-caqvuxfh.eu-north-1.elasticbeanstalk.com`;
 
-const API_BASE_URL = "http://localhost:5001/api"
-const SOCKET_URL = "http://localhost:5001"
+// const API_BASE_URL = "http://localhost:5001/api"
+// const SOCKET_URL = "http://localhost:5001"
 
 const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
@@ -2248,7 +2248,7 @@ export default function App() {
         )}
 
         {view === "daily" && (
-          <DailyAnalysisView 
+          <DailyAnalysisView
             currentPair={pair}
             onViewTrade={(t) => setSelectedTradeForView(t)}
           />
@@ -2405,32 +2405,32 @@ function LiveMarketChart({
       }));
 
     const tradesToMark = selectedTrade ? [selectedTrade] : trades;
-    
+
     tradesToMark.forEach((trade) => {
       const rawEntryTime = Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
       let entryIdx = 0;
       for (let i = 0; i < sortedData.length; i++) {
-          if (sortedData[i].time <= rawEntryTime) entryIdx = i;
-          else break;
+        if (sortedData[i].time <= rawEntryTime) entryIdx = i;
+        else break;
       }
-      
+
       if (sortedData[entryIdx]) {
-          (sortedData[entryIdx] as any).color = "#eab308"; // yellow-500
-          (sortedData[entryIdx] as any).wickColor = "#eab308";
+        (sortedData[entryIdx] as any).color = "#eab308"; // yellow-500
+        (sortedData[entryIdx] as any).wickColor = "#eab308";
       }
 
       if (trade.exitTime) {
-          const rawExitTime = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
-          let exitIdx = 0;
-          for (let i = 0; i < sortedData.length; i++) {
-              if (sortedData[i].time <= rawExitTime) exitIdx = i;
-              else break;
-          }
-          
-          if (sortedData[exitIdx]) {
-              (sortedData[exitIdx] as any).color = "#8b5cf6"; // violet-500
-              (sortedData[exitIdx] as any).wickColor = "#8b5cf6";
-          }
+        const rawExitTime = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
+        let exitIdx = 0;
+        for (let i = 0; i < sortedData.length; i++) {
+          if (sortedData[i].time <= rawExitTime) exitIdx = i;
+          else break;
+        }
+
+        if (sortedData[exitIdx]) {
+          (sortedData[exitIdx] as any).color = "#8b5cf6"; // violet-500
+          (sortedData[exitIdx] as any).wickColor = "#8b5cf6";
+        }
       }
     });
 
@@ -2472,10 +2472,10 @@ function LiveMarketChart({
       const rawEntryTime = Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
       let closestEntryCandle = sortedData[0];
       for (const c of sortedData) {
-          if (c.time <= rawEntryTime) closestEntryCandle = c;
-          else break;
+        if (c.time <= rawEntryTime) closestEntryCandle = c;
+        else break;
       }
-      
+
       if (closestEntryCandle) {
         markers.push({
           time: closestEntryCandle.time,
@@ -2501,8 +2501,8 @@ function LiveMarketChart({
         const rawExitTime = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
         let closestExitCandle = sortedData[0];
         for (const c of sortedData) {
-            if (c.time <= rawExitTime) closestExitCandle = c;
-            else break;
+          if (c.time <= rawExitTime) closestExitCandle = c;
+          else break;
         }
 
         if (closestExitCandle) {
@@ -2791,27 +2791,27 @@ function TradeViewModal({
         const rawEntryTime = Math.floor(entryT / 1000) + istOffset;
         let entryIdx = 0;
         for (let i = 0; i < sortedData.length; i++) {
-            if (sortedData[i].time <= rawEntryTime) entryIdx = i;
-            else break;
+          if (sortedData[i].time <= rawEntryTime) entryIdx = i;
+          else break;
         }
-        
+
         if (sortedData[entryIdx]) {
-            (sortedData[entryIdx] as any).color = "#eab308"; // yellow
-            (sortedData[entryIdx] as any).wickColor = "#eab308";
+          (sortedData[entryIdx] as any).color = "#eab308"; // yellow
+          (sortedData[entryIdx] as any).wickColor = "#eab308";
         }
 
         if (exitT) {
-            const rawExitTime = Math.floor(exitT / 1000) + istOffset;
-            let exitIdx = 0;
-            for (let i = 0; i < sortedData.length; i++) {
-                if (sortedData[i].time <= rawExitTime) exitIdx = i;
-                else break;
-            }
-            
-            if (sortedData[exitIdx]) {
-                (sortedData[exitIdx] as any).color = "#8b5cf6"; // violet
-                (sortedData[exitIdx] as any).wickColor = "#8b5cf6";
-            }
+          const rawExitTime = Math.floor(exitT / 1000) + istOffset;
+          let exitIdx = 0;
+          for (let i = 0; i < sortedData.length; i++) {
+            if (sortedData[i].time <= rawExitTime) exitIdx = i;
+            else break;
+          }
+
+          if (sortedData[exitIdx]) {
+            (sortedData[exitIdx] as any).color = "#8b5cf6"; // violet
+            (sortedData[exitIdx] as any).wickColor = "#8b5cf6";
+          }
         }
 
         candleSeries.setData(sortedData);
@@ -2881,12 +2881,12 @@ function TradeViewModal({
         }
 
         const markers: any[] = [];
-        
+
         const entryTimeUnix = Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
         let closestEntryCandle = sortedData[0];
         for (const c of sortedData) {
-            if (c.time <= entryTimeUnix) closestEntryCandle = c;
-            else break;
+          if (c.time <= entryTimeUnix) closestEntryCandle = c;
+          else break;
         }
 
         if (closestEntryCandle) {
@@ -2903,8 +2903,8 @@ function TradeViewModal({
           const exitTimeUnix = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
           let closestExitCandle = sortedData[0];
           for (const c of sortedData) {
-              if (c.time <= exitTimeUnix) closestExitCandle = c;
-              else break;
+            if (c.time <= exitTimeUnix) closestExitCandle = c;
+            else break;
           }
 
           if (closestExitCandle) {
@@ -2920,13 +2920,13 @@ function TradeViewModal({
 
         // Sort markers by time as required by lightweight-charts
         markers.sort((a, b) => a.time - b.time);
-        
+
         candleSeries.setMarkers(markers);
-        
+
         const timeScale = chart.timeScale();
         timeScale.setVisibleRange({
-            from: (entryTimeUnix - (10 * 60 * 60)) as any, 
-            to: (entryTimeUnix + (10 * 60 * 60)) as any,  
+          from: (entryTimeUnix - (10 * 60 * 60)) as any,
+          to: (entryTimeUnix + (10 * 60 * 60)) as any,
         });
 
         setLoading(false);
