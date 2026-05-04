@@ -23,7 +23,12 @@ const ErrorLog: React.FC = () => {
         setLoading(true);
         try {
             const response = await axios.get(API_BASE);
-            setLogs(response.data);
+            if (Array.isArray(response.data)) {
+                setLogs(response.data);
+            } else {
+                console.error('API returned non-array:', response.data);
+                setLogs([]);
+            }
         } catch (error) {
             console.error('Failed to fetch logs:', error);
         } finally {
