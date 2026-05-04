@@ -11,9 +11,9 @@ interface SystemLog {
     details?: any;
 }
 
-// const API_BASE_URL = `/api`;
-// const SOCKET_URL = `/`;
-const API_BASE = '/api/system-logs';
+import { API_BASE_URL } from '../constants';
+
+const API_BASE = `${API_BASE_URL}/system-logs`;
 
 const ErrorLog: React.FC = () => {
     const [logs, setLogs] = useState<SystemLog[]>([]);
