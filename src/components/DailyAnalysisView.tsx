@@ -5,11 +5,12 @@ import utc from "dayjs/plugin/utc";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Calendar, Activity, TrendingUp, TrendingDown, Target, RefreshCw } from "lucide-react";
 import axios from "axios";
+import { API_BASE_URL } from "../constants";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const API_BASE_URL = `/api`;
+
 const API_BASE = `${API_BASE_URL}/strategy`;
 const API_MARKET = `${API_BASE_URL}/market`;
 
