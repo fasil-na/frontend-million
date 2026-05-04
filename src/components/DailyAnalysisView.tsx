@@ -9,13 +9,13 @@ import axios from "axios";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const API_BASE = "http://localhost:5001/api/strategy";
+const API_BASE_URL = `/api`;
+const API_BASE = `${API_BASE_URL}/strategy`;
+const API_MARKET = `${API_BASE_URL}/market`;
 
 function cn(...classes: (string | boolean | undefined | null)[]) {
   return classes.filter(Boolean).join(" ");
 }
-
-const API_MARKET = "http://localhost:5001/api/market";
 
 export function DailyAnalysisView({
   currentPair,
@@ -131,11 +131,11 @@ export function DailyAnalysisView({
           <button onClick={prevDay} disabled={loading} className="px-4 py-3 rounded-xl bg-slate-950 border border-white/10 hover:bg-slate-800 transition flex items-center gap-2 text-xs font-black uppercase text-slate-300 disabled:opacity-50">
             <ChevronLeft className="w-4 h-4" /> Prev Day
           </button>
-          
+
           <div className="flex items-center gap-4 bg-slate-950 px-6 py-3 rounded-2xl border border-white/10">
             <Calendar className="w-5 h-5 text-blue-500" />
-            <input 
-              type="date" 
+            <input
+              type="date"
               value={currentDate.format("YYYY-MM-DD")}
               onChange={(e) => setCurrentDate(dayjs(e.target.value))}
               disabled={loading}
@@ -263,7 +263,7 @@ export function DailyAnalysisView({
                         </div>
                       </div>
 
-                      <button 
+                      <button
                         onClick={() => onViewTrade(trade)}
                         className="px-4 py-2 rounded-xl bg-blue-500/10 text-blue-400 text-[10px] font-black uppercase tracking-widest hover:bg-blue-500/20 transition-colors shrink-0"
                       >
