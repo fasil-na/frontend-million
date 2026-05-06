@@ -13,13 +13,12 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
+import type { Candle, Trade } from "./tradingTypes";
 import {
   createChart,
   ColorType,
   CandlestickSeries,
-  LineSeries,
   LineStyle,
-  AreaSeries,
 } from "lightweight-charts";
 import {
   TrendingUp,
@@ -44,10 +43,12 @@ import {
   ChevronUp,
   History,
   Activity as Heartbeat,
-  Calendar
+  Target
 } from "lucide-react";
 import ErrorLog from "./components/ErrorLog";
 import { DailyAnalysisView } from "./components/DailyAnalysisView";
+import { FVGDailyAnalysisView } from "./components/FVGDailyAnalysisView";
+import { LiveMarketChart } from "./components/LiveMarketChart";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -55,40 +56,6 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-interface Candle {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-interface Trade {
-  rangeHigh?: number;
-  rangeLow?: number;
-  breakoutTime?: string;
-  entryTime: string;
-  exitTime?: string;
-  direction: "buy" | "sell";
-  entryPrice: number;
-  status: "open" | "closed" | "failed";
-  exitReason?: string;
-  executionError?: string;
-  units?: number;
-  sl: number;
-  initialSL?: number;
-  tp?: number;
-  pnlPercent?: number;
-  trailingCount?: number;
-  trailingHistory?: {
-    sl: number;
-    marketPrice: number;
-    time: string;
-  }[];
-  exitPrice?: number;
-  profit?: number;
-}
 
 interface BacktestResponse {
   trades: Trade[];
@@ -101,7 +68,7 @@ interface BacktestResponse {
     initialCapital: number;
     finalBalance: number;
   };
-  dailyRecords?: any[];
+  indicators?: any;
 }
 
 interface OptimizationResponse {
@@ -457,7 +424,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
 }
 
 export default function App() {
-  const [view, setView] = useState<"backtest" | "trade" | "history" | "logs" | "daily">(
+  const [view, setView] = useState<"backtest" | "trade" | "history" | "logs" | "daily" | "fvg-daily">(
     "trade",
   );
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -965,19 +932,25 @@ export default function App() {
               active={view === "history"}
               onClick={() => setView("history")}
               icon={Database}
-              label="Trades"
-            />
-            <ViewToggle
-              active={view === "daily"}
-              onClick={() => setView("daily")}
-              icon={Calendar}
-              label="Daily"
+              label="History"
             />
             <ViewToggle
               active={view === "logs"}
               onClick={() => setView("logs")}
               icon={Heartbeat}
               label="Logs"
+            />
+            <ViewToggle
+              active={view === "daily"}
+              onClick={() => setView("daily")}
+              icon={Target}
+              label="Gold"
+            />
+            <ViewToggle
+              active={view === "fvg-daily"}
+              onClick={() => setView("fvg-daily")}
+              icon={Activity}
+              label="FVG"
             />
           </div>
 
@@ -2126,6 +2099,8 @@ export default function App() {
                       candles={candles}
                       trades={[...(backtestResult?.trades || []), ...combinedActiveTrades]}
                       selectedTrade={selectedTradeForChart}
+                      fvgs={backtestResult?.indicators?.fvgs}
+                      srLevels={backtestResult?.indicators?.srLevels}
                     />
                   </div>
                 </div>
@@ -2220,7 +2195,7 @@ export default function App() {
                                   Stop Loss {trade.trailingCount ? " (Trailed)" : ""}
                                 </p>
                                 <p className="text-xs font-bold text-rose-400 font-mono">
-                                  ${trade.sl.toLocaleString()}
+                                  ${(trade.sl || 0).toLocaleString()}
                                 </p>
                               </div>
                               <div>
@@ -2254,6 +2229,13 @@ export default function App() {
           />
         )}
 
+        {view === "fvg-daily" && (
+          <FVGDailyAnalysisView 
+            currentPair={pair}
+            onViewTrade={(t) => setSelectedTradeForView(t)}
+          />
+        )}
+
         {view === "logs" && (
           <ErrorLog />
         )}
@@ -2282,402 +2264,8 @@ export default function App() {
   );
 }
 
-function LiveMarketChart({
-  candles,
-  trades,
-  selectedTrade,
-}: {
-  candles: Candle[];
-  trades: Trade[];
-  selectedTrade?: Trade | null;
-}) {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
-  const candleSeriesRef = useRef<any>(null);
-  const ema20SeriesRef = useRef<any>(null);
-  const ema50SeriesRef = useRef<any>(null);
-  const highSeriesRef = useRef<any>(null);
-  const lowSeriesRef = useRef<any>(null);
-  const slLineRef = useRef<any>(null);
-  const tpLineRef = useRef<any>(null);
-  const entryLineRef = useRef<any>(null);
-  const rangeHighLineRef = useRef<any>(null);
-  const rangeLowLineRef = useRef<any>(null);
-  const tradeHighlightSeriesRef = useRef<any>(null);
 
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
 
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#94a3b8",
-      },
-      grid: {
-        vertLines: { color: "rgba(255, 255, 255, 0.03)" },
-        horzLines: { color: "rgba(255, 255, 255, 0.03)" },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
-      timeScale: {
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    });
-
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#10b981",
-      downColor: "#ef4444",
-      borderVisible: false,
-      wickUpColor: "#10b981",
-      wickDownColor: "#ef4444",
-    });
-
-    const tradeHighlightSeries = chart.addSeries(AreaSeries, {
-      topColor: "rgba(16, 185, 129, 0.4)",
-      bottomColor: "rgba(16, 185, 129, 0.1)",
-      lineColor: "rgba(16, 185, 129, 0.8)",
-      lineWidth: 2,
-      priceLineVisible: false,
-    });
-
-    const ema20Series = chart.addSeries(LineSeries, {
-      color: "#3b82f6",
-      lineWidth: 1,
-      title: "EMA 20",
-    });
-
-    const ema50Series = chart.addSeries(LineSeries, {
-      color: "#f59e0b",
-      lineWidth: 1,
-      title: "EMA 50",
-    });
-
-    const highSeries = chart.addSeries(LineSeries, {
-      color: "rgba(16, 185, 129, 0.3)",
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      title: "High",
-    });
-
-    const lowSeries = chart.addSeries(LineSeries, {
-      color: "rgba(239, 68, 68, 0.3)",
-      lineWidth: 1,
-      lineStyle: LineStyle.Dashed,
-      title: "Low",
-    });
-
-    chartRef.current = chart;
-    candleSeriesRef.current = candleSeries;
-    tradeHighlightSeriesRef.current = tradeHighlightSeries;
-    ema20SeriesRef.current = ema20Series;
-    ema50SeriesRef.current = ema50Series;
-    highSeriesRef.current = highSeries;
-    lowSeriesRef.current = lowSeries;
-
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chart.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!candleSeriesRef.current || candles.length === 0) return;
-
-    const istOffset = 5.5 * 60 * 60;
-    const sortedData = [...candles]
-      .sort((a, b) => a.time - b.time)
-      .map((c) => ({
-        time: (c.time + istOffset) as any,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
-
-    const tradesToMark = selectedTrade ? [selectedTrade] : trades;
-    
-    tradesToMark.forEach((trade) => {
-      const rawEntryTime = Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
-      let entryIdx = 0;
-      for (let i = 0; i < sortedData.length; i++) {
-          if (sortedData[i].time <= rawEntryTime) entryIdx = i;
-          else break;
-      }
-      
-      if (sortedData[entryIdx]) {
-          (sortedData[entryIdx] as any).color = "#eab308"; // yellow-500
-          (sortedData[entryIdx] as any).wickColor = "#eab308";
-      }
-
-      if (trade.exitTime) {
-          const rawExitTime = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
-          let exitIdx = 0;
-          for (let i = 0; i < sortedData.length; i++) {
-              if (sortedData[i].time <= rawExitTime) exitIdx = i;
-              else break;
-          }
-          
-          if (sortedData[exitIdx]) {
-              (sortedData[exitIdx] as any).color = "#8b5cf6"; // violet-500
-              (sortedData[exitIdx] as any).wickColor = "#8b5cf6";
-          }
-      }
-    });
-
-    if (sortedData.length > 0) {
-      candleSeriesRef.current.setData(sortedData);
-
-      // Calculate EMA 20
-      const ema20 = calculateEMA(
-        sortedData.map((d) => d.close),
-        20,
-      );
-      ema20SeriesRef.current.setData(
-        sortedData.map((d, i) => ({ time: d.time, value: ema20[i] })),
-      );
-
-      // Calculate EMA 50
-      const ema50 = calculateEMA(
-        sortedData.map((d) => d.close),
-        50,
-      );
-      ema50SeriesRef.current.setData(
-        sortedData.map((d, i) => ({ time: d.time, value: ema50[i] })),
-      );
-
-      // Calculate 20-period High/Low
-      const hl = calculateHighLow(sortedData, 20);
-      highSeriesRef.current.setData(
-        sortedData.map((d, i) => ({ time: d.time, value: hl.highs[i] })),
-      );
-      lowSeriesRef.current.setData(
-        sortedData.map((d, i) => ({ time: d.time, value: hl.lows[i] })),
-      );
-    }
-
-    // Add markers for trades
-    const markers: any[] = [];
-
-    tradesToMark.forEach((trade) => {
-      const rawEntryTime = Math.floor(dayjs(trade.entryTime).valueOf() / 1000) + istOffset;
-      let closestEntryCandle = sortedData[0];
-      for (const c of sortedData) {
-          if (c.time <= rawEntryTime) closestEntryCandle = c;
-          else break;
-      }
-      
-      if (closestEntryCandle) {
-        markers.push({
-          time: closestEntryCandle.time,
-          position: trade.direction === "buy" ? "belowBar" : "aboveBar",
-          color: trade.direction === "buy" ? "#10b981" : "#ef4444",
-          shape: trade.direction === "buy" ? "arrowUp" : "arrowDown",
-          text: `ENTRY ${trade.direction.toUpperCase()} @ ${trade.entryPrice}`,
-          size: 2,
-        });
-
-        if (trade.status === "open") {
-          markers.push({
-            time: closestEntryCandle.time,
-            position: trade.direction === "buy" ? "belowBar" : "aboveBar",
-            color: "#3b82f6",
-            shape: "circle",
-            text: "ACTIVE",
-          });
-        }
-      }
-
-      if (trade.exitTime) {
-        const rawExitTime = Math.floor(dayjs(trade.exitTime).valueOf() / 1000) + istOffset;
-        let closestExitCandle = sortedData[0];
-        for (const c of sortedData) {
-            if (c.time <= rawExitTime) closestExitCandle = c;
-            else break;
-        }
-
-        if (closestExitCandle) {
-          markers.push({
-            time: closestExitCandle.time,
-            position: trade.direction === "buy" ? "aboveBar" : "belowBar",
-            color: "#94a3b8",
-            shape: trade.direction === "buy" ? "arrowDown" : "arrowUp",
-            text: `EXIT ${trade.exitReason || ""} @ ${trade.exitPrice || "---"}`,
-            size: 2,
-          });
-        }
-      }
-    });
-
-    markers.sort((a, b) => a.time - b.time);
-
-    if (
-      candleSeriesRef.current &&
-      typeof candleSeriesRef.current.setMarkers === "function"
-    ) {
-      candleSeriesRef.current.setMarkers(markers);
-
-      // Scroll to selected trade if exists
-      if (selectedTrade && chartRef.current) {
-        chartRef.current.timeScale().scrollToPosition(0, false); // First reset
-        // We don't have a direct "scrollToTime" in basic lightweight-charts without more complex logic,
-        // but setMarkers already highlights it. For now, we'll ensure it's in view if possible.
-      }
-    }
-
-    // Add Entry/SL/TP Lines for the relevant trade
-    const tradeForLines = selectedTrade || trades?.find((t) => t.status === "open");
-    if (candleSeriesRef.current) {
-      // Clear existing lines
-      if (slLineRef.current) {
-        candleSeriesRef.current.removePriceLine(slLineRef.current);
-        slLineRef.current = null;
-      }
-      if (tpLineRef.current) {
-        candleSeriesRef.current.removePriceLine(tpLineRef.current);
-        tpLineRef.current = null;
-      }
-      if (entryLineRef.current) {
-        candleSeriesRef.current.removePriceLine(entryLineRef.current);
-        entryLineRef.current = null;
-      }
-      if (rangeHighLineRef.current) {
-        candleSeriesRef.current.removePriceLine(rangeHighLineRef.current);
-        rangeHighLineRef.current = null;
-      }
-      if (rangeLowLineRef.current) {
-        candleSeriesRef.current.removePriceLine(rangeLowLineRef.current);
-        rangeLowLineRef.current = null;
-      }
-
-      if (tradeForLines) {
-        // Range High/Low Lines
-        if (tradeForLines.rangeHigh) {
-          rangeHighLineRef.current = candleSeriesRef.current.createPriceLine({
-            price: tradeForLines.rangeHigh,
-            color: "#f59e0b",
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: "Range High",
-          });
-        }
-        if (tradeForLines.rangeLow) {
-          rangeLowLineRef.current = candleSeriesRef.current.createPriceLine({
-            price: tradeForLines.rangeLow,
-            color: "#f59e0b",
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: "Range Low",
-          });
-        }
-        // ENTRY Line
-        entryLineRef.current = candleSeriesRef.current.createPriceLine({
-          price: tradeForLines.entryPrice,
-          color: "#3b82f6", // Blue for entry
-          lineWidth: 2,
-          lineStyle: LineStyle.Solid,
-          axisLabelVisible: true,
-          title: `ENTRY: ${tradeForLines.entryPrice}`,
-        });
-
-        // SL Line
-        if (tradeForLines.sl) {
-          slLineRef.current = candleSeriesRef.current.createPriceLine({
-            price: tradeForLines.sl,
-            color: "#ef4444",
-            lineWidth: 2,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: `SL: ${tradeForLines.sl}`,
-          });
-        }
-
-        // TP Line
-        if (tradeForLines.tp) {
-          tpLineRef.current = candleSeriesRef.current.createPriceLine({
-            price: tradeForLines.tp,
-            color: "#10b981",
-            lineWidth: 2,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: `TP: ${tradeForLines.tp}`,
-          });
-        }
-      }
-    }
-
-    // Add Highlight Area for selected trade
-    if (selectedTrade && tradeHighlightSeriesRef.current) {
-      const entryTime =
-        Math.floor(dayjs(selectedTrade.entryTime).valueOf() / 1000) + istOffset;
-      const exitTime = selectedTrade.exitTime
-        ? Math.floor(dayjs(selectedTrade.exitTime).valueOf() / 1000) + istOffset
-        : Math.floor(dayjs().valueOf() / 1000) + istOffset;
-
-      const isProfit = (selectedTrade.profit ?? 0) >= 0;
-      tradeHighlightSeriesRef.current.applyOptions({
-        topColor: isProfit
-          ? "rgba(16, 185, 129, 0.4)"
-          : "rgba(239, 68, 68, 0.4)",
-        bottomColor: isProfit
-          ? "rgba(16, 185, 129, 0.1)"
-          : "rgba(239, 68, 68, 0.1)",
-        lineColor: isProfit
-          ? "rgba(16, 185, 129, 0.8)"
-          : "rgba(239, 68, 68, 0.8)",
-        lineWidth: 2,
-      });
-
-      const highlightData = sortedData
-        .filter((d) => d.time >= entryTime && d.time <= exitTime)
-        .map((d) => ({ time: d.time, value: d.close }));
-
-      tradeHighlightSeriesRef.current.setData(highlightData);
-    } else if (tradeHighlightSeriesRef.current) {
-      tradeHighlightSeriesRef.current.setData([]);
-    }
-  }, [candles, trades, selectedTrade]);
-
-  return (
-    <div className="p-6 bg-slate-900/40 border border-white/5 rounded-[2.5rem] backdrop-blur-sm overflow-hidden">
-      <div ref={chartContainerRef} className="w-full" />
-    </div>
-  );
-}
-
-function calculateEMA(data: number[], period: number) {
-  const k = 2 / (period + 1);
-  let ema = data[0];
-  const results = [ema];
-  for (let i = 1; i < data.length; i++) {
-    ema = data[i] * k + ema * (1 - k);
-    results.push(ema);
-  }
-  return results;
-}
-
-function calculateHighLow(data: any[], period: number) {
-  const highs = [];
-  const lows = [];
-  for (let i = 0; i < data.length; i++) {
-    const start = Math.max(0, i - period + 1);
-    const window = data.slice(start, i + 1);
-    highs.push(Math.max(...window.map((d) => d.high)));
-    lows.push(Math.min(...window.map((d) => d.low)));
-  }
-  return { highs, lows };
-}
 
 function TradeViewModal({
   trade,
@@ -2698,6 +2286,7 @@ function TradeViewModal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log("[Modal] Trade Object:", trade);
     let isMounted = true;
     let chart: any;
 
@@ -2769,6 +2358,7 @@ function TradeViewModal({
         const entryT = dayjs(trade.entryTime).valueOf();
         const exitT = trade.exitTime ? dayjs(trade.exitTime).valueOf() : null;
         const istOffset = 5.5 * 60 * 60; // 5 hours 30 mins in seconds
+        const fvgs = (trade as any).indicators?.fvgs || [];
 
         if (!response.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
           console.warn("[Modal] No candle data returned from API.");
@@ -2779,12 +2369,23 @@ function TradeViewModal({
         const sortedData = [...response.data.data]
           .sort((a, b) => a.time - b.time)
           .map((c) => {
+            const candleTimeUnix = Math.floor(c.time / 1000) + istOffset;
+            const isFormation = fvgs.some((f: any) => {
+                const fStart = Math.floor(f.formationStartTime / 1000) + istOffset;
+                const fEnd = Math.floor(f.formationEndTime / 1000) + istOffset;
+                return candleTimeUnix >= fStart && candleTimeUnix <= fEnd;
+            });
+            
             return {
-              time: (Math.floor(c.time / 1000) + istOffset) as any,
+              time: candleTimeUnix as any,
               open: c.open,
               high: c.high,
               low: c.low,
               close: c.close,
+              color: isFormation ? '#6366f1' : undefined,
+              wickColor: isFormation ? '#ffffff' : undefined,
+              borderColor: isFormation ? '#ffffff' : undefined,
+              borderVisible: isFormation ? true : undefined,
             };
           });
 
@@ -2816,6 +2417,38 @@ function TradeViewModal({
 
         candleSeries.setData(sortedData);
 
+        // Render FVG Boxes if available
+        if (fvgs.length > 0) {
+            const fvgSeries = chart.addSeries(CandlestickSeries, {
+                upColor: "rgba(99, 102, 241, 0.45)",
+                downColor: "rgba(244, 63, 94, 0.45)",
+                borderVisible: true,
+                wickVisible: false,
+                borderColor: "rgba(255, 255, 255, 0.8)",
+                priceLineVisible: false,
+                lastValueVisible: false,
+            });
+
+            const fvgData: any[] = [];
+            fvgs.forEach((fvg: any) => {
+                const fStart = Math.floor(fvg.formationStartTime / 1000) + istOffset;
+                const fEnd = Math.floor(fvg.fillTime / 1000) + istOffset;
+                sortedData.forEach(c => {
+                    if (c.time >= fStart && c.time <= fEnd) {
+                        fvgData.push({
+                            time: c.time,
+                            open: fvg.top,
+                            high: fvg.top,
+                            low: fvg.bottom,
+                            close: fvg.bottom,
+                        });
+                    }
+                });
+            });
+            fvgData.sort((a, b) => a.time - b.time);
+            fvgSeries.setData(fvgData);
+        }
+
         // Add Horizontal Lines for Range, Entry, and Exit
         if (trade.rangeHigh) {
           candleSeries.createPriceLine({
@@ -2839,20 +2472,43 @@ function TradeViewModal({
         }
 
         candleSeries.createPriceLine({
-          price: trade.entryPrice,
-          color: trade.direction === "buy" ? "#10b981" : "#ef4444",
-          lineWidth: 2,
+          price: Number(trade.entryPrice),
+          color: "#eab308", // Bright Yellow for Entry
+          lineWidth: 3,
           lineStyle: LineStyle.Solid,
           axisLabelVisible: true,
-          title: "Entry",
+          title: "ENTRY",
         });
+
+        // FVG Section Horizontal Lines
+        const ind = (trade as any).indicators;
+        if (ind?.fvgTop) {
+            candleSeries.createPriceLine({
+                price: ind.fvgTop,
+                color: "rgba(99, 102, 241, 0.8)",
+                lineWidth: 1,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: "FVG TOP",
+            });
+        }
+        if (ind?.fvgBottom) {
+            candleSeries.createPriceLine({
+                price: ind.fvgBottom,
+                color: "rgba(244, 63, 94, 0.8)",
+                lineWidth: 1,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: "FVG BOTTOM",
+            });
+        }
 
         if (trade.sl) {
           candleSeries.createPriceLine({
-            price: trade.sl,
-            color: "#ef4444",
+            price: Number(trade.sl),
+            color: "#ff4444", // Bright Red for SL
             lineWidth: 2,
-            lineStyle: LineStyle.Dashed,
+            lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
             title: `SL: ${trade.sl}`,
           });
@@ -2860,10 +2516,10 @@ function TradeViewModal({
 
         if (trade.tp) {
           candleSeries.createPriceLine({
-            price: trade.tp,
-            color: "#10b981",
+            price: Number(trade.tp),
+            color: "#00ff88", // Bright Green for TP
             lineWidth: 2,
-            lineStyle: LineStyle.Dashed,
+            lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
             title: `TP: ${trade.tp}`,
           });
