@@ -358,8 +358,8 @@ export function LiveMarketChart({
     }
 
     // Add Entry/SL/TP Lines for the relevant trade
-    const tradeForLines = selectedTrade || trades?.[0] || trades?.find((t) => t.status === "open");
     if (candleSeriesRef.current) {
+      // Clear previous FVG-specific channel lines
       if (slLineRef.current) {
         candleSeriesRef.current.removePriceLine(slLineRef.current);
         slLineRef.current = null;
@@ -380,6 +380,8 @@ export function LiveMarketChart({
         candleSeriesRef.current.removePriceLine(rangeLowLineRef.current);
         rangeLowLineRef.current = null;
       }
+
+      // Dedicated FVG Channel Lines Rendering
       if (fvgTopLineRef.current) {
         candleSeriesRef.current.removePriceLine(fvgTopLineRef.current);
         fvgTopLineRef.current = null;
@@ -393,7 +395,44 @@ export function LiveMarketChart({
         fvgMidLineRef.current = null;
       }
 
+      // If a trade is selected or we have a primary trade, show its FVG levels
+      const tradeForLines = selectedTrade || trades?.[0] || trades?.find((t) => t.status === "open");
+      
       if (tradeForLines) {
+        // FVG Parallel Channel Rendering
+        const ind = (tradeForLines as any).indicators;
+        if (ind?.fvgTop && ind?.fvgBottom) {
+            const midpoint = (ind.fvgTop + ind.fvgBottom) / 2;
+            const color = tradeForLines.direction === 'buy' ? "#6366f1" : "#f43f5e"; // Indigo or Rose
+
+            fvgTopLineRef.current = candleSeriesRef.current.createPriceLine({
+                price: ind.fvgTop,
+                color: color,
+                lineWidth: 2,
+                lineStyle: LineStyle.Solid,
+                axisLabelVisible: true,
+                title: "FVG TOP (IMBALANCE)",
+            });
+
+            fvgMidLineRef.current = candleSeriesRef.current.createPriceLine({
+                price: midpoint,
+                color: color,
+                lineWidth: 1,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: "CONSEQUENT ENCROACHMENT (50%)",
+            });
+
+            fvgBottomLineRef.current = candleSeriesRef.current.createPriceLine({
+                price: ind.fvgBottom,
+                color: color,
+                lineWidth: 2,
+                lineStyle: LineStyle.Solid,
+                axisLabelVisible: true,
+                title: "FVG BOTTOM (IMBALANCE)",
+            });
+        }
+
         if (tradeForLines.rangeHigh) {
           rangeHighLineRef.current = candleSeriesRef.current.createPriceLine({
             price: tradeForLines.rangeHigh,
@@ -442,42 +481,6 @@ export function LiveMarketChart({
             axisLabelVisible: true,
             title: `TP: ${tradeForLines.tp}`,
           });
-        }
-
-        // FVG Parallel Channel (Yellow)
-        const ind = (tradeForLines as any).indicators;
-        if (ind?.fvgTop && ind?.fvgBottom) {
-            const midpoint = (ind.fvgTop + ind.fvgBottom) / 2;
-            
-            // Top of Channel
-            fvgTopLineRef.current = candleSeriesRef.current.createPriceLine({
-                price: ind.fvgTop,
-                color: "#eab308", // Yellow-500
-                lineWidth: 1,
-                lineStyle: LineStyle.Solid,
-                axisLabelVisible: true,
-                title: "FVG TOP",
-            });
-
-            // Midpoint (Consequent Encroachment)
-            fvgMidLineRef.current = candleSeriesRef.current.createPriceLine({
-                price: midpoint,
-                color: "#eab308",
-                lineWidth: 1,
-                lineStyle: LineStyle.Dashed,
-                axisLabelVisible: true,
-                title: "FVG 50%",
-            });
-
-            // Bottom of Channel
-            fvgBottomLineRef.current = candleSeriesRef.current.createPriceLine({
-                price: ind.fvgBottom,
-                color: "#eab308",
-                lineWidth: 1,
-                lineStyle: LineStyle.Solid,
-                axisLabelVisible: true,
-                title: "FVG BOTTOM",
-            });
         }
       }
     }
