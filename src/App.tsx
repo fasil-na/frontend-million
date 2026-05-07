@@ -246,8 +246,8 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                           )}
                         </td>
                         <td className="px-5 py-4">
-                          <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl.toFixed(4) || 'N/A'}</div>
-                          <div className="text-[10px] text-slate-500">Units: {t.units.toFixed(4) || '0'}</div>
+                          <div className="text-[10px] font-bold text-rose-400/80">SL: ${t.sl ? t.sl.toFixed(4) : 'N/A'}</div>
+                          <div className="text-[10px] text-slate-500">Units: {t.units ? t.units.toFixed(4) : '0'}</div>
                           {t.status === 'failed' && t.executionError && (
                             <div className="mt-2 p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[9px] font-bold text-rose-400 leading-tight">
                               Error: {t.executionError}
@@ -340,7 +340,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                     <div className="space-y-2">
                                       <div className="flex justify-between items-center">
                                         <span className="text-[10px] text-slate-400">Entry Price</span>
-                                        <span className="text-sm font-bold text-white">${t.entryPrice.toFixed(4)}</span>
+                                        <span className="text-sm font-bold text-white">${t.entryPrice ? t.entryPrice.toFixed(4) : '0.0000'}</span>
                                       </div>
                                       <div className="flex justify-between items-center">
                                         <span className="text-[10px] text-slate-400">Initial SL</span>
@@ -348,7 +348,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                           {t.initialSL
                                             ? `$${t.initialSL.toFixed(4)}`
                                             : (t.trailingCount === 0 || !t.trailingHistory || t.trailingHistory.length === 0)
-                                              ? `$${t.sl.toFixed(4)}`
+                                              ? (t.sl ? `$${t.sl.toFixed(4)}` : 'N/A')
                                               : "Prior to Logs"
                                           }
                                         </span>
@@ -369,11 +369,11 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                       <div className="space-y-1">
                                         <div className="flex justify-between items-center">
                                           <span className="text-[9px] text-slate-500">Trigger Price</span>
-                                          <span className="text-xs font-bold text-slate-300">${h.marketPrice.toFixed(4)}</span>
+                                          <span className="text-xs font-bold text-slate-300">${h.marketPrice ? h.marketPrice.toFixed(4) : '0.0000'}</span>
                                         </div>
                                         <div className="flex justify-between items-center">
                                           <span className="text-[9px] text-slate-500">Updated SL</span>
-                                          <span className="text-xs font-bold text-emerald-400/90">${h.sl.toFixed(4)}</span>
+                                          <span className="text-xs font-bold text-emerald-400/90">${h.sl ? h.sl.toFixed(4) : '0.0000'}</span>
                                         </div>
                                       </div>
                                     </div>
@@ -389,7 +389,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                       <div className="space-y-1">
                                         <div className="flex justify-between items-center">
                                           <span className="text-[10px] text-slate-400">Exit Price</span>
-                                          <span className="text-sm font-bold text-amber-400">${(t.exitPrice || 0).toFixed(4)}</span>
+                                          <span className="text-sm font-bold text-amber-400">${t.exitPrice ? t.exitPrice.toFixed(4) : '0.0000'}</span>
                                         </div>
                                         <div className="flex justify-between items-center">
                                           <span className="text-[10px] text-slate-400">Reason</span>
