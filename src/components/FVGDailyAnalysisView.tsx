@@ -6,12 +6,13 @@ import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Calendar, Activity, TrendingUp, TrendingDown, Target, RefreshCw } from "lucide-react";
 import axios from "axios";
 import { LiveMarketChart } from "./LiveMarketChart";
+import { API_BASE_URL } from "../constants";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-const API_BASE = "http://localhost:5001/api/strategy";
-const API_MARKET = "http://localhost:5001/api/market";
+const API_BASE = `${API_BASE_URL}/strategy`;
+const API_MARKET = `${API_BASE_URL}/market`;
 
 function cn(...classes: (string | boolean | undefined | null)[]) {
   return classes.filter(Boolean).join(" ");
@@ -38,7 +39,7 @@ export function FVGDailyAnalysisView({
   useEffect(() => {
     fetchMonthlyStats(currentDate.year(), currentDate.month(), currentPair);
   }, [currentDate.month(), currentDate.year(), currentPair]);
-// ***
+  // ***
   const fetchMonthlyStats = async (year: number, month: number, pair: string) => {
     setMonthlyLoading(true);
     try {
@@ -133,11 +134,11 @@ export function FVGDailyAnalysisView({
           <button onClick={prevDay} disabled={loading} className="px-4 py-3 rounded-xl bg-slate-950 border border-white/10 hover:bg-slate-800 transition flex items-center gap-2 text-xs font-black uppercase text-slate-300 disabled:opacity-50">
             <ChevronLeft className="w-4 h-4" /> Prev Day
           </button>
-          
+
           <div className="flex items-center gap-4 bg-slate-950 px-6 py-3 rounded-2xl border border-white/10">
             <Calendar className="w-5 h-5 text-indigo-500" />
-            <input 
-              type="date" 
+            <input
+              type="date"
               value={currentDate.format("YYYY-MM-DD")}
               onChange={(e) => setCurrentDate(dayjs(e.target.value))}
               disabled={loading}
@@ -175,135 +176,135 @@ export function FVGDailyAnalysisView({
           <div className="space-y-8">
             {/* IN-PAGE CHART */}
             <div className="bg-slate-950 rounded-[2.5rem] border border-white/5 overflow-hidden">
-                <div className="px-8 py-4 border-b border-white/5 flex items-center justify-between">
-                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-indigo-500" /> Day Visual Audit
-                    </h3>
-                    <div className="text-[10px] font-bold text-slate-500 uppercase">
-                        {currentRecord.trades.length} Trades Detected
-                    </div>
+              <div className="px-8 py-4 border-b border-white/5 flex items-center justify-between">
+                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-indigo-500" /> Day Visual Audit
+                </h3>
+                <div className="text-[10px] font-bold text-slate-500 uppercase">
+                  {currentRecord.trades.length} Trades Detected
                 </div>
-                <div className="h-[400px]">
-                    <LiveMarketChart 
-                        candles={currentRecord.candles}
-                        trades={currentRecord.trades}
-                        selectedTrade={selectedTradeForChart}
-                        fvgs={currentRecord.indicators?.fvgs}
-                        height={400}
-                    />
-                </div>
+              </div>
+              <div className="h-[400px]">
+                <LiveMarketChart
+                  candles={currentRecord.candles}
+                  trades={currentRecord.trades}
+                  selectedTrade={selectedTradeForChart}
+                  fvgs={currentRecord.indicators?.fvgs}
+                  height={400}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Daily Stats Card */}
-            <div className="lg:col-span-1 space-y-6">
-              <div className="bg-slate-950 rounded-[2rem] p-6 border border-white/5">
-                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
-                  <Target className="w-4 h-4 text-indigo-500" /> Daily Performance
-                </h4>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-400">Total Trades</span>
-                    <span className="text-lg font-black text-white">{currentRecord.tradesCount}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-400">Net Daily PnL</span>
-                    <span className={cn(
-                      "text-lg font-black",
-                      currentRecord.dailyPnl > 0 ? "text-emerald-400" : currentRecord.dailyPnl < 0 ? "text-rose-400" : "text-slate-400"
-                    )}>
-                      {currentRecord.dailyPnl > 0 ? "+" : ""}${currentRecord.dailyPnl.toFixed(4)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-indigo-600/5 border border-indigo-500/10 rounded-[2rem]">
-                 <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">FVG Insight</p>
-                 <p className="text-xs text-slate-500 leading-relaxed">
-                   Highlighting candles that triggered Fair Value Gaps in <span className="text-indigo-400 font-bold">blue</span> for visual audit.
-                 </p>
-              </div>
-            </div>
-
-            {/* Trades List */}
-            <div className="lg:col-span-2">
-              <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 px-4">
-                FVG Execution History
-              </h4>
-              {currentRecord.tradesCount === 0 ? (
-                <div className="bg-slate-950 rounded-[2rem] p-12 text-center border border-white/5">
-                  <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">No FVG entry on this day</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {currentRecord.trades.map((trade: any, idx: number) => (
-                    <div key={idx} className="bg-slate-950 rounded-[2rem] p-6 border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-indigo-500/30 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "w-12 h-12 rounded-2xl flex items-center justify-center",
-                          trade.direction === "buy" ? "bg-indigo-500/10 text-indigo-400" : "bg-rose-500/10 text-rose-400"
-                        )}>
-                          {trade.direction === "buy" ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
-                        </div>
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-widest text-white mb-1">
-                            {trade.direction === "buy" ? "Long" : "Short"} Imbalance
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-500 font-mono">
-                            {dayjs(trade.entryTime).tz('Asia/Kolkata').format("HH:mm:ss")} IST
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-8">
-                        <div>
-                          <p className="text-[9px] font-black text-slate-600 uppercase mb-1">Entry</p>
-                          <p className="text-sm font-bold text-white font-mono">${trade.entryPrice.toFixed(4)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[9px] font-black text-slate-600 uppercase mb-1">Profit</p>
-                          <p className={cn(
-                            "text-sm font-black font-mono",
-                            trade.profit > 0 ? "text-emerald-400" : "text-rose-400"
-                          )}>
-                            {trade.profit > 0 ? "+" : ""}{trade.profit.toFixed(4)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <button 
-                        onClick={() => {
-                          setSelectedTradeForChart(trade);
-                        }}
-                        className={cn(
-                            "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shrink-0 border",
-                            selectedTradeForChart === trade 
-                                ? "bg-indigo-500 text-white border-indigo-400" 
-                                : "bg-indigo-500/10 text-indigo-400 border-indigo-500/10 hover:bg-indigo-500/20"
-                        )}
-                      >
-                        {selectedTradeForChart === trade ? "Selected" : "Highlight Gap"}
-                      </button>
-                      
-                      <button 
-                        onClick={() => {
-                          onViewTrade({
-                            ...trade,
-                            indicators: currentRecord.indicators
-                          });
-                        }}
-                        className="px-4 py-2 rounded-xl bg-slate-800 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-colors shrink-0 border border-white/5"
-                      >
-                        Full Graph
-                      </button>
+              {/* Daily Stats Card */}
+              <div className="lg:col-span-1 space-y-6">
+                <div className="bg-slate-950 rounded-[2rem] p-6 border border-white/5">
+                  <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <Target className="w-4 h-4 text-indigo-500" /> Daily Performance
+                  </h4>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-400">Total Trades</span>
+                      <span className="text-lg font-black text-white">{currentRecord.tradesCount}</span>
                     </div>
-                  ))}
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-400">Net Daily PnL</span>
+                      <span className={cn(
+                        "text-lg font-black",
+                        currentRecord.dailyPnl > 0 ? "text-emerald-400" : currentRecord.dailyPnl < 0 ? "text-rose-400" : "text-slate-400"
+                      )}>
+                        {currentRecord.dailyPnl > 0 ? "+" : ""}${currentRecord.dailyPnl.toFixed(4)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                <div className="p-6 bg-indigo-600/5 border border-indigo-500/10 rounded-[2rem]">
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">FVG Insight</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Highlighting candles that triggered Fair Value Gaps in <span className="text-indigo-400 font-bold">blue</span> for visual audit.
+                  </p>
+                </div>
+              </div>
+
+              {/* Trades List */}
+              <div className="lg:col-span-2">
+                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 px-4">
+                  FVG Execution History
+                </h4>
+                {currentRecord.tradesCount === 0 ? (
+                  <div className="bg-slate-950 rounded-[2rem] p-12 text-center border border-white/5">
+                    <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">No FVG entry on this day</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {currentRecord.trades.map((trade: any, idx: number) => (
+                      <div key={idx} className="bg-slate-950 rounded-[2rem] p-6 border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-indigo-500/30 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "w-12 h-12 rounded-2xl flex items-center justify-center",
+                            trade.direction === "buy" ? "bg-indigo-500/10 text-indigo-400" : "bg-rose-500/10 text-rose-400"
+                          )}>
+                            {trade.direction === "buy" ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-widest text-white mb-1">
+                              {trade.direction === "buy" ? "Long" : "Short"} Imbalance
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-500 font-mono">
+                              {dayjs(trade.entryTime).tz('Asia/Kolkata').format("HH:mm:ss")} IST
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-8">
+                          <div>
+                            <p className="text-[9px] font-black text-slate-600 uppercase mb-1">Entry</p>
+                            <p className="text-sm font-bold text-white font-mono">${trade.entryPrice.toFixed(4)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[9px] font-black text-slate-600 uppercase mb-1">Profit</p>
+                            <p className={cn(
+                              "text-sm font-black font-mono",
+                              trade.profit > 0 ? "text-emerald-400" : "text-rose-400"
+                            )}>
+                              {trade.profit > 0 ? "+" : ""}{trade.profit.toFixed(4)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setSelectedTradeForChart(trade);
+                          }}
+                          className={cn(
+                            "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shrink-0 border",
+                            selectedTradeForChart === trade
+                              ? "bg-indigo-500 text-white border-indigo-400"
+                              : "bg-indigo-500/10 text-indigo-400 border-indigo-500/10 hover:bg-indigo-500/20"
+                          )}
+                        >
+                          {selectedTradeForChart === trade ? "Selected" : "Highlight Gap"}
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            onViewTrade({
+                              ...trade,
+                              indicators: currentRecord.indicators
+                            });
+                          }}
+                          className="px-4 py-2 rounded-xl bg-slate-800 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-colors shrink-0 border border-white/5"
+                        >
+                          Full Graph
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
         )}
       </div>
     </motion.div>
