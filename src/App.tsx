@@ -49,6 +49,7 @@ import ErrorLog from "./components/ErrorLog";
 import { DailyAnalysisView } from "./components/DailyAnalysisView";
 import { FVGDailyAnalysisView } from "./components/FVGDailyAnalysisView";
 import { LiveMarketChart } from "./components/LiveMarketChart";
+import { LiveConfigsView } from "./components/LiveConfigsView";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -128,6 +129,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
   const [trades, setTrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
+  const [selectedPair, setSelectedPair] = useState<string>("All Pairs");
 
   useEffect(() => {
     fetchTrades();
@@ -181,6 +183,19 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex items-center bg-slate-900 border border-white/5 rounded-xl px-3 py-1">
+            <BarChart3 className="w-4 h-4 text-slate-500 mr-2" />
+            <select 
+              value={selectedPair}
+              onChange={(e) => setSelectedPair(e.target.value)}
+              className="bg-transparent text-xs font-black uppercase tracking-widest text-slate-300 outline-none py-2 cursor-pointer"
+            >
+              <option value="All Pairs">All Pairs</option>
+              {Array.from(new Set(trades.map(t => t.pair))).filter(Boolean).map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
           <button onClick={handleClearAll} className="px-5 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition active:scale-95 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-rose-400">
             <Trash2 className="w-4 h-4" />
             Clear All
@@ -211,14 +226,17 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                   <th className="px-5 py-5">Pair</th>
                   <th className="px-5 py-5">Entry / Exit</th>
                   <th className="px-5 py-5">SL / Units</th>
-                  <th className="px-5 py-5 text-center">Trailing</th>
+                  <th className="px-5 py-5 text-center">Details</th>
                   <th className="px-5 py-5 text-right">Profit</th>
                   <th className="px-10 py-5 text-center">Status</th>
                   <th className="px-8 py-5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {Array.isArray(trades) && [...trades].sort((a, b) => new Date(b.recordedAt || b.entryTime).getTime() - new Date(a.recordedAt || a.entryTime).getTime()).map(t => {
+                {Array.isArray(trades) && trades
+                  .filter(t => selectedPair === "All Pairs" || t.pair === selectedPair)
+                  .sort((a, b) => new Date(b.recordedAt || b.entryTime).getTime() - new Date(a.recordedAt || a.entryTime).getTime())
+                  .map(t => {
                   const isExpanded = expandedTradeId === t.entryTime;
                   return (
                     <React.Fragment key={t.entryTime}>
@@ -264,9 +282,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                 : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
                             )}
                           >
-                            <Zap className={cn("w-3.5 h-3.5", isExpanded && "text-blue-300")} />
-                            <span className="text-xs font-black">{t.trailingCount || 0}</span>
-                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 opacity-50" /> : <ChevronDown className="w-3.5 h-3.5 opacity-50" />}
+                            <ChevronDown className={cn("w-4 h-4 transition-transform", isExpanded && "rotate-180")} />
                           </button>
                         </td>
                         <td className="px-5 py-4 text-right">
@@ -328,7 +344,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                             <div className="flex flex-col gap-5">
                               <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 pb-3">
                                 <History className="w-4 h-4 text-blue-500" />
-                                Interactive Trade Lifecycle & Trailing Events
+                                Interactive Trade Lifecycle
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -347,38 +363,13 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                         <span className="text-sm font-bold text-rose-400/80">
                                           {t.initialSL
                                             ? `$${t.initialSL.toFixed(4)}`
-                                            : (t.trailingCount === 0 || !t.trailingHistory || t.trailingHistory.length === 0)
-                                              ? (t.sl ? `$${t.sl.toFixed(4)}` : 'N/A')
-                                              : "Prior to Logs"
+                                            : (t.sl ? `$${t.sl.toFixed(4)}` : 'N/A')
                                           }
                                         </span>
                                       </div>
                                     </div>
                                   </div>
                                 </div>
-
-                                {/* Trailing Steps */}
-                                {t.trailingHistory && [...t.trailingHistory].sort((a: any, b: any) => new Date(a.time).getTime() - new Date(b.time).getTime()).map((h: any, idx: number) => (
-                                  <div key={idx} className="relative group animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
-                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-                                    <div className="relative p-4 bg-slate-900 rounded-2xl border border-blue-500/10">
-                                      <div className="flex justify-between items-center mb-2">
-                                        <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Trail #{idx + 1}</div>
-                                        <div className="text-[9px] font-mono text-slate-600">{dayjs(h.time).tz('Asia/Kolkata').format("HH:mm:ss")} IST</div>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-[9px] text-slate-500">Trigger Price</span>
-                                          <span className="text-xs font-bold text-slate-300">${h.marketPrice ? h.marketPrice.toFixed(4) : '0.0000'}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-[9px] text-slate-500">Updated SL</span>
-                                          <span className="text-xs font-bold text-emerald-400/90">${h.sl ? h.sl.toFixed(4) : '0.0000'}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
 
                                 {/* Final State */}
                                 {t.status === 'closed' && (
@@ -417,7 +408,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
 }
 
 export default function App() {
-  const [view, setView] = useState<"backtest" | "trade" | "history" | "logs" | "daily" | "fvg-daily">(
+  const [view, setView] = useState<"backtest" | "trade" | "history" | "logs" | "daily" | "fvg-daily" | "live-configs">(
     "trade",
   );
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -479,10 +470,8 @@ export default function App() {
     updateBackendSettings({ riskMode });
   }, [riskMode]);
 
-  // Leverage & Trailing SL
   const [maxPositionSize, setMaxPositionSize] = useState(100);
   const [leverage, setLeverage] = useState(0);
-  const [trailingSL, setTrailingSL] = useState(true);
 
   useEffect(() => {
     updateBackendSettings({ leverage });
@@ -491,10 +480,6 @@ export default function App() {
   useEffect(() => {
     updateBackendSettings({ maxPositionSize });
   }, [maxPositionSize]);
-
-  useEffect(() => {
-    updateBackendSettings({ trailingSL });
-  }, [trailingSL]);
 
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(
     null,
@@ -549,7 +534,6 @@ export default function App() {
       if (s.isLiveTrading !== undefined) setIsLiveTrading(s.isLiveTrading);
       if (s.leverage !== undefined) setLeverage(s.leverage);
       if (s.maxPositionSize !== undefined) setMaxPositionSize(s.maxPositionSize);
-      if (s.trailingSL !== undefined) setTrailingSL(s.trailingSL);
       if (s.riskMode) setRiskMode(s.riskMode);
       isSettingsLoaded.current = true;
     } catch (err) {
@@ -626,7 +610,6 @@ export default function App() {
           capital: initialCapital,
           maxPositionSize,
           leverage,
-          trailingSL,
           timezone: backtestTimezone,
           isLive: isLiveMonitoring,
           ...strategyParams,
@@ -703,7 +686,6 @@ export default function App() {
           capital: initialCapital,
           maxPositionSize,
           leverage,
-          trailingSL,
         },
       );
       setOptimizationResult(response.data);
@@ -945,6 +927,12 @@ export default function App() {
               icon={Activity}
               label="FVG"
             />
+            <ViewToggle
+              active={view === "live-configs"}
+              onClick={() => setView("live-configs")}
+              icon={Settings2}
+              label="Configs"
+            />
           </div>
 
           <div className="hidden md:flex items-center gap-4 shrink-0">
@@ -1159,28 +1147,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between px-2 py-2">
-                        <div className="flex items-center gap-2">
-                          <TrendingUp className="w-4 h-4 text-blue-400" />
-                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                            Trailing Stop Loss
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setTrailingSL(!trailingSL)}
-                          className={cn(
-                            "w-12 h-6 rounded-full transition-all relative",
-                            trailingSL ? "bg-blue-600" : "bg-slate-800",
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "absolute top-1 w-4 h-4 rounded-full bg-white transition-all",
-                              trailingSL ? "left-7" : "left-1",
-                            )}
-                          />
-                        </button>
-                      </div>
 
                       <div className="h-px w-full bg-white/5 my-4" />
 
@@ -1499,7 +1465,7 @@ export default function App() {
                             <th className="px-8 py-5">Time/Type</th>
                             <th className="px-5 py-5">Entry / Exit</th>
                             <th className="px-5 py-5">SL / Units</th>
-                            <th className="px-5 py-5 text-center">Trailing</th>
+                            <th className="px-5 py-5 text-center">Details</th>
                             <th className="px-5 py-5 text-right">Net Profit</th>
                             <th className="px-10 py-5 text-center">Action</th>
                           </tr>
@@ -1682,7 +1648,7 @@ export default function App() {
                                               <div className="flex flex-col gap-5">
                                                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-white/5 pb-3">
                                                   <History className="w-4 h-4 text-blue-500" />
-                                                  Interactive Trade Lifecycle & Trailing Events
+                                                  Interactive Trade Lifecycle
                                                 </div>
 
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1701,9 +1667,7 @@ export default function App() {
                                                           <span className="text-sm font-bold text-rose-400/80">
                                                             {trade.initialSL
                                                               ? `$${trade.initialSL.toFixed(4)}`
-                                                              : (trade.trailingCount === 0 || !trade.trailingHistory || trade.trailingHistory.length === 0)
-                                                                ? `$${trade.sl?.toFixed(4)}`
-                                                                : "Prior to Logs"
+                                                              : `$${trade.sl?.toFixed(4)}`
                                                             }
                                                           </span>
                                                         </div>
@@ -1711,28 +1675,6 @@ export default function App() {
                                                     </div>
                                                   </div>
 
-                                                  {/* Trailing Steps */}
-                                                  {trade.trailingHistory && [...trade.trailingHistory].sort((a: any, b: any) => new Date(a.time).getTime() - new Date(b.time).getTime()).map((h: any, idx: number) => (
-                                                    <div key={idx} className="relative group animate-in slide-in-from-left-2 duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
-                                                      <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-                                                      <div className="relative p-4 bg-slate-900 rounded-2xl border border-blue-500/10">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                          <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Trail #{idx + 1}</div>
-                                                          <div className="text-[9px] font-mono text-slate-600">{dayjs(h.time).tz(backtestTimezone === 'IST' ? 'Asia/Kolkata' : 'UTC').format("HH:mm:ss")}</div>
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                          <div className="flex justify-between items-center">
-                                                            <span className="text-[9px] text-slate-500">Trigger</span>
-                                                            <span className="text-xs font-bold text-slate-300">${h.marketPrice.toFixed(4)}</span>
-                                                          </div>
-                                                          <div className="flex justify-between items-center">
-                                                            <span className="text-[9px] text-slate-500">Updated SL</span>
-                                                            <span className="text-xs font-bold text-emerald-400/90">${h.sl.toFixed(4)}</span>
-                                                          </div>
-                                                        </div>
-                                                      </div>
-                                                    </div>
-                                                  ))}
 
                                                   {/* Final State */}
                                                   {trade.status === 'closed' && (
@@ -2232,9 +2174,13 @@ export default function App() {
         {view === "logs" && (
           <ErrorLog />
         )}
+
+        {view === "live-configs" && (
+          <LiveConfigsView />
+        )}
       </main>
 
-      <footer className="mt-20 border-t border-white/5 py-12 relative z-10">
+      <footer className="mt-20 border-t border-white/5 py-12 relative z-0">
         <div className="max-w-7xl mx-auto px-6 h-12 flex flex-col md:flex-row items-center justify-between text-slate-600 text-[10px] font-black uppercase tracking-widest leading-none">
           <div className="flex items-center gap-3">
             <BarChart3 className="w-4 h-4 opacity-30" />
