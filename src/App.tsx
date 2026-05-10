@@ -443,22 +443,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    updateBackendSettings({ pair });
-  }, [pair]);
-
-  useEffect(() => {
-    updateBackendSettings({ selectedStrategyId });
-  }, [selectedStrategyId]);
-
-  useEffect(() => {
-    updateBackendSettings({ initialCapital });
-  }, [initialCapital]);
-
-  useEffect(() => {
-    updateBackendSettings({ timeInterval: liveInterval });
-  }, [liveInterval]);
-
-  useEffect(() => {
     updateBackendSettings({ isLiveMonitoring });
   }, [isLiveMonitoring]);
 
@@ -466,20 +450,8 @@ export default function App() {
     updateBackendSettings({ isLiveTrading });
   }, [isLiveTrading]);
 
-  useEffect(() => {
-    updateBackendSettings({ riskMode });
-  }, [riskMode]);
-
   const [maxPositionSize, setMaxPositionSize] = useState(100);
   const [leverage, setLeverage] = useState(0);
-
-  useEffect(() => {
-    updateBackendSettings({ leverage });
-  }, [leverage]);
-
-  useEffect(() => {
-    updateBackendSettings({ maxPositionSize });
-  }, [maxPositionSize]);
 
   const [backtestResult, setBacktestResult] = useState<BacktestResponse | null>(
     null,
@@ -526,15 +498,8 @@ export default function App() {
     try {
       const response = await axios.get(`${API_BASE_URL}/settings`);
       const s = response.data;
-      if (s.pair) setPair(s.pair);
-      if (s.selectedStrategyId) setSelectedStrategyId(s.selectedStrategyId);
-      if (s.initialCapital) setInitialCapital(s.initialCapital);
-      if (s.timeInterval) setLiveInterval(s.timeInterval);
       if (s.isLiveMonitoring !== undefined) setIsLiveMonitoring(s.isLiveMonitoring);
       if (s.isLiveTrading !== undefined) setIsLiveTrading(s.isLiveTrading);
-      if (s.leverage !== undefined) setLeverage(s.leverage);
-      if (s.maxPositionSize !== undefined) setMaxPositionSize(s.maxPositionSize);
-      if (s.riskMode) setRiskMode(s.riskMode);
       isSettingsLoaded.current = true;
     } catch (err) {
       console.error("Failed to fetch settings:", err);
