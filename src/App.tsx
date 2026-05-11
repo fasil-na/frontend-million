@@ -130,6 +130,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
   const [loading, setLoading] = useState(true);
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
   const [selectedPair, setSelectedPair] = useState<string>("All Pairs");
+  const [selectedTimeRange, setSelectedTimeRange] = useState<string>("Today");
 
   useEffect(() => {
     fetchTrades();
@@ -196,6 +197,17 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
               ))}
             </select>
           </div>
+          <div className="flex items-center bg-slate-900 border border-white/5 rounded-xl px-3 py-1">
+            <Clock className="w-4 h-4 text-slate-500 mr-2" />
+            <select 
+              value={selectedTimeRange}
+              onChange={(e) => setSelectedTimeRange(e.target.value)}
+              className="bg-transparent text-xs font-black uppercase tracking-widest text-slate-300 outline-none py-2 cursor-pointer"
+            >
+              <option value="Today">Today</option>
+              <option value="All Time">All Time</option>
+            </select>
+          </div>
           <button onClick={handleClearAll} className="px-5 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition active:scale-95 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-rose-400">
             <Trash2 className="w-4 h-4" />
             Clear All
@@ -234,7 +246,13 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
               </thead>
               <tbody className="divide-y divide-white/5">
                 {Array.isArray(trades) && trades
-                  .filter(t => selectedPair === "All Pairs" || t.pair === selectedPair)
+                  .filter(t => {
+                    const matchesPair = selectedPair === "All Pairs" || t.pair === selectedPair;
+                    const tradeDate = dayjs(t.entryTime).tz('Asia/Kolkata').format("YYYY-MM-DD");
+                    const today = dayjs().tz('Asia/Kolkata').format("YYYY-MM-DD");
+                    const matchesTime = selectedTimeRange === "All Time" || tradeDate === today;
+                    return matchesPair && matchesTime;
+                  })
                   .sort((a, b) => new Date(b.recordedAt || b.entryTime).getTime() - new Date(a.recordedAt || a.entryTime).getTime())
                   .map(t => {
                   const isExpanded = expandedTradeId === t.entryTime;
@@ -306,7 +324,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                               <>
                                 <div className="flex items-center justify-end gap-1.5">
                                   <span className={cn("text-sm font-black", displayProfit >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                                    {displayProfit >= 0 ? '+' : ''}{displayProfit.toFixed(4)}
+                                    {displayProfit >= 0 ? '+' : ''}{Number(displayProfit || 0).toFixed(4)}
                                   </span>
                                   {isTradeOpen && tickerPrice && cleanTPair === cleanCPair && (
                                     <div className="flex items-center gap-1">
@@ -317,7 +335,7 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                 </div>
                                 {displayPnl !== undefined && (
                                   <div className={cn("text-[10px] font-bold", displayPnl >= 0 ? "text-emerald-500/60" : "text-rose-500/60")}>
-                                    {displayPnl.toFixed(2)}%
+                                    {Number(displayPnl || 0).toFixed(2)}%
                                   </div>
                                 )}
                               </>
@@ -362,8 +380,8 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                                         <span className="text-[10px] text-slate-400">Initial SL</span>
                                         <span className="text-sm font-bold text-rose-400/80">
                                           {t.initialSL
-                                            ? `$${t.initialSL.toFixed(4)}`
-                                            : (t.sl ? `$${t.sl.toFixed(4)}` : 'N/A')
+                                            ? `$${Number(t.initialSL).toFixed(4)}`
+                                            : (t.sl ? `$${Number(t.sl).toFixed(4)}` : 'N/A')
                                           }
                                         </span>
                                       </div>
@@ -591,19 +609,24 @@ export default function App() {
 
   const handleManualTrade = async (side: "buy" | "sell") => {
     console.log(`[ManualTrade] 🚀 Initiating manual ${side} order...`);
-    console.log(`[ManualTrade] 📍 Pair: ${pair}, Price: ${tickerPrice}, Capital: ${initialCapital}`);
-
-    // if (!tickerPrice) {
-    //   console.warn("[ManualTrade] ⚠️ Ticker price is missing, aborting.");
-    //   return;
-    // }
-
+    
     try {
+      // 1. Fetch latest configs to find a matching one
+      const configsRes = await axios.get(`${API_BASE_URL}/live-configs`);
+      const configs = configsRes.data;
+      const matchingConfig = configs.find((c: any) => c.pair === pair && c.isEnabled);
+
+      if (!matchingConfig) {
+        alert(`No enabled configuration found for ${pair}. Please create and enable one in the Configs tab first.`);
+        return;
+      }
+
       const payload = {
         side,
-        pair: pair.replace("B-", "").replace("_", ""),
-        price: 0.1946,
-        capital: initialCapital,
+        configId: matchingConfig._id,
+        pair: pair, // Send the full pair name
+        overrideQuantity: undefined, // Let backend calculate from capital if not specified
+        slPrice: undefined // Let backend calculate default SL if not specified
       };
 
       console.log(`[ManualTrade] 📤 Sending POST request to ${API_BASE_URL}/trade/execute`, payload);
@@ -611,9 +634,12 @@ export default function App() {
       const res = await axios.post(`${API_BASE_URL}/trade/execute`, payload);
 
       console.log(`[ManualTrade] ✅ Order Response:`, res.data);
-      alert(`Manual ${side === "buy" ? "Buy" : "Sell/Close"} Order: ${JSON.stringify(res.data)}`);
+      alert(`Manual ${side === "buy" ? "Buy" : "Sell/Close"} Order Successful!`);
+      
+      // Refresh history
+      fetchTradeHistory();
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.response?.data?.error || err.message;
+      const msg = err.response?.data?.error || err.response?.data?.message || err.message;
       console.error(`[ManualTrade] ❌ Manual ${side} Failed:`, msg, err);
       alert(`Manual ${side === "buy" ? "Buy" : "Sell"} Failed: ${msg}`);
     }
@@ -1327,7 +1353,7 @@ export default function App() {
                       )}
                     </p>
                     <p className="text-[10px] font-bold text-slate-500 mt-1">
-                      WIN RATE: {optimizationResult.best.winRate.toFixed(4)}%
+                      WIN RATE: {(optimizationResult.best?.winRate || 0).toFixed(4)}%
                     </p>
                   </div>
                   <p className="text-[10px] text-center text-slate-500 font-bold uppercase tracking-widest">
@@ -1408,7 +1434,7 @@ export default function App() {
                     />
                     <ResultCard
                       title="Win Rate"
-                      value={`${backtestResult.summary.winRate.toFixed(4)}%`}
+                      value={`${(backtestResult.summary?.winRate || 0).toFixed(4)}%`}
                       icon={RefreshCw}
                       color="text-blue-400"
                     />
@@ -1550,11 +1576,11 @@ export default function App() {
                                           </td>
                                           <td className="px-5 py-6">
                                             <div className={cn("text-xs font-black uppercase", trade.direction === 'buy' ? 'text-emerald-400' : 'text-rose-400')}>
-                                              {trade.direction} @ ${trade.entryPrice.toFixed(4)}
+                                              {trade.direction} @ ${Number(trade.entryPrice || 0).toFixed(4)}
                                             </div>
                                             {trade.exitPrice && (
                                               <div className="text-[10px] text-slate-400 mt-1">
-                                                Exited @ ${trade.exitPrice.toFixed(4)}
+                                                Exited @ ${Number(trade.exitPrice || 0).toFixed(4)}
                                                 <span className="ml-2 opacity-50 italic">({trade.exitReason || 'Target Hit'})</span>
                                               </div>
                                             )}
@@ -1631,8 +1657,8 @@ export default function App() {
                                                           <span className="text-[10px] text-slate-400">Initial SL</span>
                                                           <span className="text-sm font-bold text-rose-400/80">
                                                             {trade.initialSL
-                                                              ? `$${trade.initialSL.toFixed(4)}`
-                                                              : `$${trade.sl?.toFixed(4)}`
+                                                              ? `$${Number(trade.initialSL || 0).toFixed(4)}`
+                                                              : `$${Number(trade.sl || 0).toFixed(4)}`
                                                             }
                                                           </span>
                                                         </div>
