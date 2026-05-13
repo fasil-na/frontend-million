@@ -252,21 +252,19 @@ export function LiveMarketChart({
       }
 
       // Render FVG Boxes
-      // Filter FVGs to only show the one associated with the selected trade (or first trade)
-      const tradeForFvg = selectedTrade || trades?.[0];
-      const fvgsToShow = tradeForFvg && (tradeForFvg as any).indicators 
-        ? fvgs.filter(f => 
-            f.top === (tradeForFvg as any).indicators.fvgTop && 
-            f.bottom === (tradeForFvg as any).indicators.fvgBottom
-          )
-        : []; // Only show FVG if we have a trade to associate it with
+      // Show ALL FVGs that were detected for this period
+      const fvgsToShow = fvgs || []; 
 
       const fvgData: any[] = [];
       fvgsToShow.forEach((fvg: any) => {
         const fStart = Math.floor(fvg.formationStartTime / 1000) + istOffset;
-        const fEnd = Math.floor(fvg.fillTime / 1000) + istOffset;
-        const color = fvg.direction === 'bullish' ? "rgba(99, 102, 241, 0.35)" : "rgba(244, 63, 94, 0.35)";
-        const borderColor = fvg.direction === 'bullish' ? "rgba(99, 102, 241, 0.8)" : "rgba(244, 63, 94, 0.8)";
+        // If not filled, use the end of the chart data
+        const fEnd = fvg.filledAt 
+            ? Math.floor(fvg.filledAt / 1000) + istOffset 
+            : sortedData[sortedData.length - 1].time;
+            
+        const color = fvg.direction === 'bullish' ? "rgba(99, 102, 241, 0.2)" : "rgba(244, 63, 94, 0.2)";
+        const borderColor = fvg.direction === 'bullish' ? "rgba(99, 102, 241, 0.5)" : "rgba(244, 63, 94, 0.5)";
 
         sortedData.forEach(c => {
           if (c.time >= fStart && c.time <= fEnd) {
@@ -402,34 +400,24 @@ export function LiveMarketChart({
         // FVG Parallel Channel Rendering
         const ind = (tradeForLines as any).indicators;
         if (ind?.fvgTop && ind?.fvgBottom) {
-            const midpoint = (ind.fvgTop + ind.fvgBottom) / 2;
-            const color = tradeForLines.direction === 'buy' ? "#6366f1" : "#f43f5e"; // Indigo or Rose
-
             fvgTopLineRef.current = candleSeriesRef.current.createPriceLine({
                 price: ind.fvgTop,
-                color: color,
-                lineWidth: 2,
+                color: "#6366f1",
+                lineWidth: 1,
                 lineStyle: LineStyle.Solid,
                 axisLabelVisible: true,
-                title: "FVG TOP (IMBALANCE)",
+                title: "FVG TOP",
             });
 
-            fvgMidLineRef.current = candleSeriesRef.current.createPriceLine({
-                price: midpoint,
-                color: color,
-                lineWidth: 1,
-                lineStyle: LineStyle.Dashed,
-                axisLabelVisible: true,
-                title: "CONSEQUENT ENCROACHMENT (50%)",
-            });
+
 
             fvgBottomLineRef.current = candleSeriesRef.current.createPriceLine({
                 price: ind.fvgBottom,
-                color: color,
-                lineWidth: 2,
+                color: "#6366f1",
+                lineWidth: 1,
                 lineStyle: LineStyle.Solid,
                 axisLabelVisible: true,
-                title: "FVG BOTTOM (IMBALANCE)",
+                title: "FVG BOTTOM",
             });
         }
 

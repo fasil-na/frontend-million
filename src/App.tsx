@@ -115,7 +115,7 @@ interface Strategy {
 
 import { API_BASE_URL, SOCKET_URL } from "./constants";
 
-const socket = io(SOCKET_URL, {
+export const socket = io(SOCKET_URL, {
   transports: ["websocket", "polling"],
   upgrade: true,
   reconnection: true,
@@ -323,8 +323,13 @@ function TradeHistoryView({ tickerPrice, currentPair, leverage }: { tickerPrice:
                             return (
                               <>
                                 <div className="flex items-center justify-end gap-1.5">
-                                  <span className={cn("text-sm font-black", displayProfit >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                                    {displayProfit >= 0 ? '+' : ''}{Number(displayProfit || 0).toFixed(4)}
+                                  <span className={cn(
+                                    "text-sm font-black", 
+                                    displayProfit > 0 ? "text-emerald-400" : 
+                                    (displayProfit < 0 || (t.exitReason && t.exitReason.includes('SL'))) ? "text-rose-400" : 
+                                    "text-slate-400"
+                                  )}>
+                                    {displayProfit > 0 ? '+' : ''}{Number(displayProfit || 0).toFixed(4)}
                                   </span>
                                   {isTradeOpen && tickerPrice && cleanTPair === cleanCPair && (
                                     <div className="flex items-center gap-1">

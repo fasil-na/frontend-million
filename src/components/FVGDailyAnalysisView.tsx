@@ -49,7 +49,7 @@ export function FVGDailyAnalysisView({
         month,
         pair,
         timezone: "IST",
-        resolution: "5"
+        resolution: "1"
       });
       setMonthlyStats(data.summary);
     } catch (err) {
@@ -65,7 +65,7 @@ export function FVGDailyAnalysisView({
     setSelectedTradeForChart(null);
     try {
       const { data } = await axios.get(`${API_BASE}/fvg-analysis`, {
-        params: { date: dateStr, pair: pairStr }
+        params: { date: dateStr, pair: pairStr, resolution: "1" }
       });
       setCurrentRecord(data);
     } catch (err) {

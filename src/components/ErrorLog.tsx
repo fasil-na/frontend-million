@@ -1,36 +1,33 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import dayjs from 'dayjs';
 import axios from 'axios';
-import { Trash2, RefreshCw, AlertCircle, Clock } from 'lucide-react';
-
-interface SystemLog {
-    _id: string;
-    timestamp: string;
-    level: string;
-    source: string;
-    message: string;
-    details?: any;
-}
-
+import { Trash2, RefreshCw, AlertCircle, Clock, CheckCircle, Info, AlertTriangle, Activity, Shield } from 'lucide-react';
+import { socket } from '../App';
 import { API_BASE_URL } from '../constants';
 
-const API_BASE = `${API_BASE_URL}/system-logs`;
+interface SystemLog {
+    _id?: string;
+    timestamp: string | Date;
+    level: 'info' | 'success' | 'warning' | 'error';
+    source: string;
+    message: string;
+    metadata?: any;
+}
+
+const API_BASE = `${API_BASE_URL}/trade/logs`;
 
 const ErrorLog: React.FC = () => {
     const [logs, setLogs] = useState<SystemLog[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedLevel, setSelectedLevel] = useState('ALL');
 
-    const fetchLogs = async (level = selectedLevel) => {
+    const fetchLogs = async () => {
         setLoading(true);
         try {
-            const response = await axios.get(API_BASE, {
-                params: { level: level !== 'ALL' ? level : undefined }
-            });
+            const response = await axios.get(API_BASE);
             if (Array.isArray(response.data)) {
                 setLogs(response.data);
-            } else {
-                console.error('API returned non-array:', response.data);
-                setLogs([]);
             }
         } catch (error) {
             console.error('Failed to fetch logs:', error);
@@ -40,7 +37,7 @@ const ErrorLog: React.FC = () => {
     };
 
     const clearLogs = async () => {
-        if (!window.confirm('Are you sure you want to clear all error logs?')) return;
+        if (!window.confirm('Are you sure you want to clear all system logs?')) return;
         try {
             await axios.delete(API_BASE);
             setLogs([]);
@@ -50,45 +47,79 @@ const ErrorLog: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchLogs(selectedLevel);
-        const interval = setInterval(() => fetchLogs(selectedLevel), 10000); // Auto refresh every 10s
-        return () => clearInterval(interval);
-    }, [selectedLevel]);
+        fetchLogs();
 
-    const getLevelColor = (level: string) => {
-        switch (level) {
-            case 'ERROR': return { bg: 'bg-red-500/10', border: 'border-red-900/20', hover: 'hover:border-red-500/40', text: 'text-red-400', badge: 'bg-red-500/20' };
-            case 'WARN': return { bg: 'bg-yellow-500/10', border: 'border-yellow-900/20', hover: 'hover:border-yellow-500/40', text: 'text-yellow-400', badge: 'bg-yellow-500/20' };
-            case 'INFO': return { bg: 'bg-blue-500/10', border: 'border-blue-900/20', hover: 'hover:border-blue-500/40', text: 'text-blue-400', badge: 'bg-blue-500/20' };
-            default: return { bg: 'bg-gray-500/10', border: 'border-gray-800/20', hover: 'hover:border-gray-500/40', text: 'text-gray-400', badge: 'bg-gray-500/20' };
+        // Listen for real-time logs
+        socket.on('system_log', (newLog: SystemLog) => {
+            setLogs(prev => [newLog, ...prev].slice(0, 200)); // Keep last 200
+        });
+
+        return () => {
+            socket.off('system_log');
+        };
+    }, []);
+
+    const getLevelConfig = (level: string) => {
+        switch (level.toLowerCase()) {
+            case 'error': return { 
+                bg: 'bg-rose-500/10', 
+                border: 'border-rose-500/20', 
+                text: 'text-rose-400', 
+                badge: 'bg-rose-500/20',
+                icon: <AlertCircle className="w-3 h-3" />
+            };
+            case 'success': return { 
+                bg: 'bg-emerald-500/10', 
+                border: 'border-emerald-500/20', 
+                text: 'text-emerald-400', 
+                badge: 'bg-emerald-500/20',
+                icon: <CheckCircle className="w-3 h-3" />
+            };
+            case 'warning': return { 
+                bg: 'bg-amber-500/10', 
+                border: 'border-amber-500/20', 
+                text: 'text-amber-400', 
+                badge: 'bg-amber-500/20',
+                icon: <AlertTriangle className="w-3 h-3" />
+            };
+            default: return { 
+                bg: 'bg-blue-500/10', 
+                border: 'border-blue-500/20', 
+                text: 'text-blue-400', 
+                badge: 'bg-blue-500/20',
+                icon: <Info className="w-3 h-3" />
+            };
         }
     };
 
+    const filteredLogs = selectedLevel === 'ALL' 
+        ? logs 
+        : logs.filter(l => l.level.toUpperCase() === selectedLevel);
+
     return (
-        <div className="bg-[#1a1b1e] border border-gray-800 rounded-xl overflow-hidden shadow-2xl flex flex-col h-[400px]">
+        <div className="bg-slate-950/50 border border-white/5 rounded-[2rem] overflow-hidden backdrop-blur-xl flex flex-col h-[500px]">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between bg-[#121316]">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-500/10 rounded-lg">
-                        <AlertCircle className="w-5 h-5 text-indigo-500" />
+            <div className="px-8 py-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+                        <Activity className="w-5 h-5 text-indigo-400" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold text-white leading-none">System Logs</h3>
-                        <p className="text-xs text-gray-400 mt-1">Monitoring backend health & connectivity</p>
+                        <h3 className="text-sm font-black text-white uppercase tracking-widest">System Engine Logs</h3>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-0.5">Real-time Socket & Execution Monitoring</p>
                     </div>
                 </div>
                 
-                <div className="flex items-center gap-3">
-                    {/* Level Filter */}
-                    <div className="flex items-center bg-black/40 rounded-lg p-1 border border-gray-800">
-                        {['ALL', 'ERROR', 'WARN', 'INFO'].map((level) => (
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5">
+                        {['ALL', 'ERROR', 'SUCCESS', 'INFO'].map((level) => (
                             <button
                                 key={level}
                                 onClick={() => setSelectedLevel(level)}
-                                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest ${
                                     selectedLevel === level 
-                                    ? 'bg-gray-700 text-white' 
-                                    : 'text-gray-500 hover:text-gray-300'
+                                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
+                                    : 'text-slate-500 hover:text-slate-300'
                                 }`}
                             >
                                 {level}
@@ -96,19 +127,17 @@ const ErrorLog: React.FC = () => {
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-2 border-l border-gray-800 pl-3">
+                    <div className="flex items-center gap-2 border-l border-white/10 pl-4">
                         <button 
-                            onClick={() => fetchLogs()}
+                            onClick={fetchLogs}
                             disabled={loading}
-                            className="p-2 hover:bg-gray-800 rounded-lg transition-all text-gray-400 hover:text-white"
-                            title="Refresh Logs"
+                            className="p-2.5 hover:bg-white/5 rounded-xl transition-all text-slate-400 hover:text-white border border-transparent hover:border-white/10"
                         >
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                         </button>
                         <button 
                             onClick={clearLogs}
-                            className="p-2 hover:bg-red-500/10 rounded-lg transition-all text-gray-400 hover:text-red-500"
-                            title="Clear All Logs"
+                            className="p-2.5 hover:bg-rose-500/10 rounded-xl transition-all text-slate-400 hover:text-rose-400 border border-transparent hover:border-rose-500/10"
                         >
                             <Trash2 className="w-4 h-4" />
                         </button>
@@ -117,68 +146,84 @@ const ErrorLog: React.FC = () => {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                {logs.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center opacity-40">
-                        <AlertCircle className="w-12 h-12 mb-3 text-gray-600" />
-                        <p className="text-sm font-medium text-gray-500">No {selectedLevel !== 'ALL' ? selectedLevel.toLowerCase() : ''} logs found.</p>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-black/20">
+                {filteredLogs.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center">
+                        <div className="w-20 h-20 rounded-full bg-slate-900 flex items-center justify-center mb-4 border border-white/5 opacity-20">
+                            <Shield className="w-10 h-10 text-slate-500" />
+                        </div>
+                        <p className="text-xs font-black text-slate-600 uppercase tracking-widest">System Diagnostics Clean</p>
                     </div>
                 ) : (
-                    logs.map((log) => {
-                        const colors = getLevelColor(log.level);
+                    filteredLogs.map((log, idx) => {
+                        const config = getLevelConfig(log.level);
                         return (
-                            <div key={log._id} className={`group ${colors.bg} border ${colors.border} ${colors.hover} p-4 rounded-lg transition-all`}>
-                                <div className="flex items-start justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`px-2 py-0.5 ${colors.badge} ${colors.text} text-[10px] font-bold rounded uppercase tracking-wider`}>
+                            <motion.div 
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                key={log._id || idx} 
+                                className={`group ${config.bg} border ${config.border} p-5 rounded-[1.5rem] transition-all hover:bg-white/[0.04]`}
+                            >
+                                <div className="flex items-start justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className={`flex items-center gap-1.5 px-2.5 py-1 ${config.badge} ${config.text} text-[10px] font-black rounded-lg uppercase tracking-widest border border-white/5`}>
+                                            {config.icon}
                                             {log.level}
                                         </span>
-                                        <span className="text-[10px] text-gray-500 font-bold opacity-60">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                                             {log.source}
                                         </span>
-                                        <span className="text-[11px] text-gray-500 flex items-center gap-1">
-                                            <Clock className="w-3 h-3" />
-                                            {new Date(log.timestamp).toLocaleString()}
-                                        </span>
                                     </div>
+                                    <span className="text-[10px] font-bold text-slate-600 flex items-center gap-1.5">
+                                        <Clock className="w-3 h-3" />
+                                        {dayjs(log.timestamp).format('HH:mm:ss.SSS')}
+                                    </span>
                                 </div>
-                                <p className="text-sm text-gray-200 font-medium leading-relaxed">
+                                <p className="text-xs font-bold text-slate-300 leading-relaxed tracking-tight">
                                     {log.message}
                                 </p>
-                                {log.details && (
-                                    <pre className="mt-2 text-[10px] bg-black/40 p-2 rounded text-gray-500 overflow-x-auto border border-gray-800/50">
-                                        {JSON.stringify(log.details, null, 2)}
-                                    </pre>
+                                {log.metadata && (
+                                    <div className="mt-4 overflow-hidden rounded-xl border border-white/5">
+                                        <pre className="text-[10px] font-medium bg-black/60 p-4 text-slate-500 overflow-x-auto whitespace-pre-wrap leading-normal">
+                                            {JSON.stringify(log.metadata, null, 2)}
+                                        </pre>
+                                    </div>
                                 )}
-                            </div>
+                            </motion.div>
                         );
                     })
                 )}
             </div>
 
             {/* Footer Status */}
-            <div className="px-6 py-2 bg-[#121316] border-t border-gray-800 flex items-center justify-center">
-               <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${logs.length === 0 ? 'bg-green-500 animate-pulse' : 'bg-indigo-500'}`} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                        {logs.length === 0 ? 'Diagnostic: Clean' : `${selectedLevel} Logs: ${logs.length} Active`}
+            <div className="px-8 py-3 bg-white/[0.02] border-t border-white/5 flex items-center justify-between">
+               <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                        Engine Status: Nominal
                     </span>
+               </div>
+               <div className="text-[10px] font-black text-slate-700 uppercase tracking-widest">
+                   {filteredLogs.length} Events Captured
                </div>
             </div>
 
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar {
-                    width: 4px;
+                    width: 6px;
                 }
                 .custom-scrollbar::-webkit-scrollbar-track {
                     background: transparent;
                 }
                 .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: #27272a;
+                    background: rgba(255,255,255,0.05);
                     border-radius: 10px;
                 }
                 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                    background: #3f3f46;
+                    background: rgba(255,255,255,0.1);
                 }
             `}</style>
         </div>
