@@ -134,16 +134,16 @@ export const LiveConfigsView = () => {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-8"
         >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                 <div>
-                    <h2 className="text-3xl font-black text-white italic tracking-tight">System Engine</h2>
+                    <h2 className="text-2xl md:text-3xl font-black text-white italic tracking-tight">System Engine</h2>
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-1">
                         Independent Strategy Execution Nodes
                     </p>
                 </div>
                 <button 
                     onClick={() => setShowAddModal(true)}
-                    className="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-[10px] transition-all active:scale-95 flex items-center gap-3 shadow-lg shadow-indigo-500/20 border border-indigo-400/30"
+                    className="w-full sm:w-auto px-6 py-4 sm:py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-[10px] transition-all active:scale-95 flex items-center justify-center gap-3 shadow-lg shadow-indigo-500/20 border border-indigo-400/30"
                 >
                     <Plus className="w-4 h-4" />
                     Deploy New Node
@@ -367,26 +367,26 @@ const ConfigCard = ({ config, strategyName, onToggle, onDelete, onUpdate }: {
     onUpdate: (updates: Partial<LiveConfig>) => void
 }) => {
     return (
-        <div className="relative group">
+        <div className="relative group h-full">
             <div className={cn(
-                "absolute -inset-0.5 rounded-[3rem] blur opacity-10 transition duration-1000 group-hover:opacity-30",
+                "absolute -inset-0.5 rounded-[2rem] md:rounded-[3rem] blur opacity-10 transition duration-1000 group-hover:opacity-30",
                 config.isEnabled ? "bg-indigo-500" : "bg-slate-700"
             )}></div>
             
-            <div className="relative bg-slate-900 border border-white/10 rounded-[3rem] overflow-hidden p-10 flex flex-col h-full shadow-2xl">
-                <div className="flex items-start justify-between mb-10">
-                    <div className="flex items-center gap-5">
+            <div className="relative bg-slate-900 border border-white/10 rounded-[2rem] md:rounded-[3rem] overflow-hidden p-6 md:p-10 flex flex-col h-full shadow-2xl">
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-6 mb-10">
+                    <div className="flex items-center gap-4 md:gap-5">
                         <div className={cn(
-                            "w-16 h-16 rounded-[1.5rem] flex items-center justify-center border transition-all duration-500",
+                            "w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[1.5rem] flex items-center justify-center border transition-all duration-500",
                             config.isEnabled ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-400" : "bg-slate-950 border-white/5 text-slate-700"
                         )}>
-                            <Cpu className="w-8 h-8" />
+                            <Cpu className="w-6 h-6 md:w-8 md:h-8" />
                         </div>
                         <div>
-                            <div className="flex items-center gap-4 mb-1">
-                                <span className="text-3xl font-black text-white italic tracking-tighter">{config.pair}</span>
+                            <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-1">
+                                <span className="text-xl md:text-3xl font-black text-white italic tracking-tighter">{config.pair}</span>
                                 <span className={cn(
-                                    "px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border",
+                                    "px-2 py-0.5 md:px-3 md:py-1 rounded-lg text-[8px] md:text-[9px] font-black uppercase tracking-widest border",
                                     config.isEnabled 
                                         ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20" 
                                         : "bg-slate-950 text-slate-600 border-white/5"
@@ -394,15 +394,15 @@ const ConfigCard = ({ config, strategyName, onToggle, onDelete, onUpdate }: {
                                     {config.isEnabled ? 'Active' : 'Standby'}
                                 </span>
                             </div>
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-1">{strategyName}</p>
+                            <p className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] ml-1">{strategyName}</p>
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                         <button 
                             onClick={onToggle}
                             className={cn(
-                                "p-4 rounded-2xl transition-all active:scale-90 border",
+                                "p-3 md:p-4 rounded-2xl transition-all active:scale-90 border",
                                 config.isEnabled 
                                     ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border-amber-500/20 shadow-lg shadow-amber-500/10" 
                                     : "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/20 shadow-lg shadow-emerald-500/10"
@@ -412,22 +412,22 @@ const ConfigCard = ({ config, strategyName, onToggle, onDelete, onUpdate }: {
                         </button>
                         <button 
                             onClick={onDelete}
-                            className="p-4 rounded-2xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20 transition-all active:scale-90 shadow-lg shadow-rose-500/10"
+                            className="p-3 md:p-4 rounded-2xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20 transition-all active:scale-90 shadow-lg shadow-rose-500/10"
                         >
                             <Trash2 className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+                <div className="grid grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                     <Stat label="Interval" value={`${config.timeInterval}M`} icon={<Clock className="w-3 h-3" />} />
                     <Stat label="Capital" value={`$${config.initialCapital}`} icon={<BarChart3 className="w-3 h-3" />} />
                     <Stat label="Leverage" value={`${config.leverage}X`} icon={<Target className="w-3 h-3" />} />
                     <Stat label="Risk" value={config.riskMode} icon={<Shield className="w-3 h-3" />} />
                 </div>
 
-                <div className="mt-auto pt-8 border-t border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-8">
+                <div className="mt-auto pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-8 w-full sm:w-auto justify-between sm:justify-start">
                         <div 
                             onClick={() => onUpdate({ autoTrade: !config.autoTrade })}
                             className="flex items-center gap-3 cursor-pointer group"
@@ -448,7 +448,7 @@ const ConfigCard = ({ config, strategyName, onToggle, onDelete, onUpdate }: {
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-700 uppercase tracking-widest font-mono">
+                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-700 uppercase tracking-widest font-mono w-full sm:w-auto justify-end">
                         UID: {config._id.slice(-8).toUpperCase()}
                     </div>
                 </div>
