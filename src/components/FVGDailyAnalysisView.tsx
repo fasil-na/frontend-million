@@ -21,9 +21,11 @@ function cn(...classes: (string | boolean | undefined | null)[]) {
 export function FVGDailyAnalysisView({
   currentPair,
   onViewTrade,
+  riskAmount: globalRiskAmount,
 }: {
   currentPair: string;
   onViewTrade: (trade: any) => void;
+  riskAmount: number | null;
 }) {
   const [currentDate, setCurrentDate] = useState<dayjs.Dayjs>(dayjs());
   const [loading, setLoading] = useState(false);
@@ -31,14 +33,31 @@ export function FVGDailyAnalysisView({
   const [selectedTradeForChart, setSelectedTradeForChart] = useState<any>(null);
   const [monthlyStats, setMonthlyStats] = useState<any>(null);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
+  const [hasLiveConfig, setHasLiveConfig] = useState(false);
 
   useEffect(() => {
+    checkLiveConfigs();
+  }, [currentPair]);
+
+  const checkLiveConfigs = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/live-configs`);
+      const exists = data.some((c: any) => c.pair === currentPair && c.strategyId === 'fvg-imbalance' && c.isEnabled);
+      setHasLiveConfig(exists);
+    } catch (err) {
+      console.error("Failed to fetch live configs", err);
+    }
+  };
+
+  useEffect(() => {
+    if (globalRiskAmount === null) return;
     fetchDailyAnalysis(currentDate.format("YYYY-MM-DD"), currentPair);
-  }, [currentDate, currentPair]);
+  }, [currentDate, currentPair, globalRiskAmount]);
 
   useEffect(() => {
+    if (globalRiskAmount === null) return;
     fetchMonthlyStats(currentDate.year(), currentDate.month(), currentPair);
-  }, [currentDate.month(), currentDate.year(), currentPair]);
+  }, [currentDate.month(), currentDate.year(), currentPair, globalRiskAmount]);
   // ***
   const fetchMonthlyStats = async (year: number, month: number, pair: string) => {
     setMonthlyLoading(true);
@@ -49,7 +68,8 @@ export function FVGDailyAnalysisView({
         month,
         pair,
         timezone: "IST",
-        resolution: "1"
+        resolution: "1",
+        riskAmount: globalRiskAmount
       });
       setMonthlyStats(data.summary);
     } catch (err) {
@@ -77,7 +97,6 @@ export function FVGDailyAnalysisView({
 
   const prevDay = () => setCurrentDate((c) => c.subtract(1, "day"));
   const nextDay = () => setCurrentDate((c) => c.add(1, "day"));
-  const isWeekend = currentDate.day() === 0 || currentDate.day() === 6;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
@@ -89,12 +108,23 @@ export function FVGDailyAnalysisView({
               FVG Imbalance Analysis
             </span>
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tighter">FVG Day-by-Day</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-4xl font-black text-white tracking-tighter">FVG Day-by-Day</h2>
+            <div className="px-3 py-1 rounded-xl bg-slate-900 border border-white/10 flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Risk: ${currentRecord?.riskAmount || globalRiskAmount}</span>
+            </div>
+          </div>
         </div>
 
         {/* Monthly Summary Stats */}
         {!monthlyLoading && monthlyStats && (
           <div className="flex flex-wrap gap-4">
+            <div className="bg-slate-900/60 border border-white/10 rounded-2xl px-6 py-3 flex flex-col justify-center min-w-[140px]">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <Activity className="w-3 h-3 text-slate-400" /> Total Trades
+              </span>
+              <span className="text-xl font-black text-white">{monthlyStats.count}</span>
+            </div>
             <div className="bg-slate-900/60 border border-white/10 rounded-2xl px-6 py-3 flex flex-col justify-center min-w-[140px]">
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
                 <Target className="w-3 h-3 text-indigo-500" /> Month Wins
@@ -151,15 +181,7 @@ export function FVGDailyAnalysisView({
           </button>
         </div>
 
-        {isWeekend ? (
-          <div className="py-20 text-center flex flex-col items-center">
-            <div className="w-16 h-16 rounded-full bg-slate-950 flex items-center justify-center mb-4 border border-white/5">
-              <Calendar className="w-8 h-8 text-slate-600" />
-            </div>
-            <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest mb-2">Weekend</h3>
-            <p className="text-sm text-slate-500">Markets are closed. No trading activity.</p>
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div className="py-32 text-center flex flex-col items-center">
             <RefreshCw className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Identifying Gaps...</h3>
@@ -180,14 +202,19 @@ export function FVGDailyAnalysisView({
                 <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                   <Activity className="w-4 h-4 text-indigo-500" /> Day Visual Audit
                 </h3>
-                <div className="text-[10px] font-bold text-slate-500 uppercase">
-                  {currentRecord.trades.length} Trades Detected
+                <div className="flex items-center gap-4">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase">
+                    {currentRecord.trades.length} Real
+                  </div>
+                  <div className="text-[10px] font-bold text-indigo-500 uppercase">
+                    {currentRecord.simulatedTrades?.length || 0} Simulated
+                  </div>
                 </div>
               </div>
               <div className="h-[400px]">
                 <LiveMarketChart
                   candles={currentRecord.candles}
-                  trades={currentRecord.trades}
+                  trades={[...currentRecord.trades, ...(currentRecord.simulatedTrades || []).map((t: any) => ({ ...t, type: 'paper' }))]}
                   selectedTrade={selectedTradeForChart}
                   fvgs={currentRecord.indicators?.fvgs}
                   height={400}
@@ -204,18 +231,35 @@ export function FVGDailyAnalysisView({
                   </h4>
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-slate-400">Total Trades</span>
-                      <span className="text-lg font-black text-white">{currentRecord.tradesCount}</span>
+                      <span className="text-xs font-bold text-indigo-400">Strategy Signals</span>
+                      <span className="text-lg font-black text-white">{currentRecord.simulatedTrades?.length || 0}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-slate-400">Net Daily PnL</span>
+                      <span className="text-xs font-bold text-slate-400">Strategy PnL</span>
                       <span className={cn(
                         "text-lg font-black",
-                        currentRecord.dailyPnl > 0 ? "text-emerald-400" : currentRecord.dailyPnl < 0 ? "text-rose-400" : "text-slate-400"
+                        (currentRecord.simulatedTrades?.reduce((a: any, t: any) => a + t.profit, 0) || 0) > 0 ? "text-emerald-400" : (currentRecord.simulatedTrades?.reduce((a: any, t: any) => a + t.profit, 0) || 0) < 0 ? "text-rose-400" : "text-slate-400"
                       )}>
-                        {currentRecord.dailyPnl > 0 ? "+" : ""}${currentRecord.dailyPnl.toFixed(4)}
+                        ${(currentRecord.simulatedTrades?.reduce((a: any, t: any) => a + t.profit, 0) || 0).toFixed(4)}
                       </span>
                     </div>
+                    {hasLiveConfig && (
+                      <div className="pt-4 border-t border-white/5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-emerald-500">Real Trades</span>
+                          <span className="text-sm font-black text-slate-400">{currentRecord.tradesCount}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-slate-500">Real Net PnL</span>
+                          <span className={cn(
+                            "text-sm font-bold",
+                            currentRecord.dailyPnl >= 0 ? "text-emerald-500/60" : "text-rose-500/60"
+                          )}>
+                            ${currentRecord.dailyPnl.toFixed(4)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -230,16 +274,22 @@ export function FVGDailyAnalysisView({
               {/* Trades List */}
               <div className="lg:col-span-2">
                 <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 px-4">
-                  FVG Execution History
+                  Daily Execution History
                 </h4>
-                {currentRecord.tradesCount === 0 ? (
+                {currentRecord.tradesCount === 0 && (!currentRecord.simulatedTrades || currentRecord.simulatedTrades.length === 0) ? (
                   <div className="bg-slate-950 rounded-[2rem] p-12 text-center border border-white/5">
-                    <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">No FVG entry on this day</p>
+                    <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">No signals detected on this day</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {currentRecord.trades.map((trade: any, idx: number) => (
-                      <div key={idx} className="bg-slate-950 rounded-[2rem] p-6 border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-indigo-500/30 transition-colors">
+                    {[
+                      ...(hasLiveConfig ? currentRecord.trades.map((t: any) => ({ ...t, isReal: true })) : []),
+                      ...(currentRecord.simulatedTrades || []).map((t: any) => ({ ...t, isReal: false }))
+                    ].sort((a, b) => dayjs(a.entryTime).valueOf() - dayjs(b.entryTime).valueOf()).map((trade: any, idx: number) => (
+                      <div key={idx} className={cn(
+                        "bg-slate-950 rounded-[2rem] p-6 border flex flex-col md:flex-row md:items-center justify-between gap-6 transition-colors",
+                        trade.isReal ? "border-white/5 hover:border-indigo-500/30" : "border-indigo-500/10 opacity-80"
+                      )}>
                         <div className="flex items-center gap-4">
                           <div className={cn(
                             "w-12 h-12 rounded-2xl flex items-center justify-center",
@@ -248,9 +298,17 @@ export function FVGDailyAnalysisView({
                             {trade.direction === "buy" ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
                           </div>
                           <div>
-                            <p className="text-xs font-black uppercase tracking-widest text-white mb-1">
-                              {trade.direction === "buy" ? "Long" : "Short"} Imbalance
-                            </p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="text-xs font-black uppercase tracking-widest text-white">
+                                {trade.direction === "buy" ? "Long" : "Short"} FVG
+                              </p>
+                              <span className={cn(
+                                "px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter",
+                                trade.isReal ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" : "bg-indigo-500/20 text-indigo-400 border border-indigo-500/20"
+                              )}>
+                                {trade.isReal ? "Real" : "Paper"}
+                              </span>
+                            </div>
                             <p className="text-[10px] font-bold text-slate-500 font-mono">
                               {dayjs(trade.entryTime).tz('Asia/Kolkata').format("HH:mm:ss")} IST
                             </p>
@@ -261,6 +319,14 @@ export function FVGDailyAnalysisView({
                           <div>
                             <p className="text-[9px] font-black text-slate-600 uppercase mb-1">Entry</p>
                             <p className="text-sm font-bold text-white font-mono">${trade.entryPrice.toFixed(4)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-600 uppercase mb-1">SL</p>
+                            <p className="text-sm font-bold text-rose-400 font-mono">${trade.sl ? trade.sl.toFixed(4) : '---'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-600 uppercase mb-1">TP</p>
+                            <p className="text-sm font-bold text-emerald-400 font-mono">${trade.tp ? trade.tp.toFixed(4) : '---'}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-[9px] font-black text-slate-600 uppercase mb-1">Profit</p>
