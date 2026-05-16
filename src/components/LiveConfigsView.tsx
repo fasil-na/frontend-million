@@ -35,7 +35,7 @@ interface LiveConfig {
     pair: string;
     timeInterval: string;
     leverage: number;
-    initialCapital: number;
+    riskAmount: number;
     isEnabled: boolean;
     autoTrade: boolean;
     riskMode: 'minimal' | 'capital';
@@ -53,7 +53,7 @@ export const LiveConfigsView = () => {
         pair: 'B-XAU_USDT',
         timeInterval: '1',
         leverage: 20,
-        initialCapital: 0.5,
+        riskAmount: 5,
         autoTrade: false,
         isEnabled: true,
         riskMode: 'minimal' as const,
@@ -246,11 +246,11 @@ export const LiveConfigsView = () => {
                                     </div>
 
                                     <div className="space-y-3">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Allocated Capital ($)</label>
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Allocated Risk ($)</label>
                                         <input 
                                             type="number"
-                                            value={newConfig.initialCapital}
-                                            onChange={(e) => setNewConfig(prev => ({ ...prev, initialCapital: Number(e.target.value) }))}
+                                            value={newConfig.riskAmount}
+                                            onChange={(e) => setNewConfig(prev => ({ ...prev, riskAmount: Number(e.target.value) }))}
                                             className="w-full bg-slate-950 border border-white/10 rounded-2xl px-6 py-4 text-white font-black text-xs focus:ring-2 focus:ring-indigo-500 transition outline-none"
                                         />
                                     </div>
@@ -421,7 +421,7 @@ const ConfigCard = ({ config, strategyName, onToggle, onDelete, onUpdate }: {
 
                 <div className="grid grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                     <Stat label="Interval" value={`${config.timeInterval}M`} icon={<Clock className="w-3 h-3" />} />
-                    <Stat label="Capital" value={`$${config.initialCapital}`} icon={<BarChart3 className="w-3 h-3" />} />
+                    <Stat label="Risk Amt" value={`$${config.riskAmount}`} icon={<BarChart3 className="w-3 h-3" />} />
                     <Stat label="Leverage" value={`${config.leverage}X`} icon={<Target className="w-3 h-3" />} />
                     <Stat label="Risk" value={config.riskMode} icon={<Shield className="w-3 h-3" />} />
                 </div>

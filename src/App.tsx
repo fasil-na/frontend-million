@@ -66,7 +66,7 @@ interface BacktestResponse {
     successCount: number;
     failedCount: number;
     winRate: number;
-    initialCapital: number;
+    riskAmount: number;
     finalBalance: number;
   };
   indicators?: any;
@@ -437,7 +437,7 @@ export default function App() {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [pair, setPair] = useState("B-BTC_USDT");
   const [selectedStrategyId, setSelectedStrategyId] = useState("opening-breakout");
-  const [initialCapital, setInitialCapital] = useState(5);
+  const [riskAmount, setRiskAmount] = useState<number | null>(null);
   const [liveInterval, setLiveInterval] = useState("60");
   const [isLiveMonitoring, setIsLiveMonitoring] = useState(false);
   const [isLiveTrading, setIsLiveTrading] = useState(false);
@@ -472,6 +472,12 @@ export default function App() {
   useEffect(() => {
     updateBackendSettings({ isLiveTrading });
   }, [isLiveTrading]);
+
+  useEffect(() => {
+    if (riskAmount !== null) {
+      updateBackendSettings({ riskAmount });
+    }
+  }, [riskAmount]);
 
   const [maxPositionSize, setMaxPositionSize] = useState(100);
   const [leverage, setLeverage] = useState(0);
@@ -523,10 +529,17 @@ export default function App() {
       const s = response.data;
       if (s.isLiveMonitoring !== undefined) setIsLiveMonitoring(s.isLiveMonitoring);
       if (s.isLiveTrading !== undefined) setIsLiveTrading(s.isLiveTrading);
+      if (s.riskAmount !== undefined) setRiskAmount(s.riskAmount);
+      else setRiskAmount(5); // Fallback to 5 if DB is empty but we should have it
+      if (s.leverage !== undefined) setLeverage(s.leverage);
+      if (s.pair !== undefined) setPair(s.pair);
+      if (s.selectedStrategyId !== undefined) setSelectedStrategyId(s.selectedStrategyId);
+      
       isSettingsLoaded.current = true;
     } catch (err) {
       console.error("Failed to fetch settings:", err);
-      isSettingsLoaded.current = true; // Still allow updates even if fetch fails
+      setRiskAmount(5); // Ensure it's not null so views can load
+      isSettingsLoaded.current = true;
     }
   };
 
@@ -595,7 +608,7 @@ export default function App() {
           strategyId: selectedStrategyId,
           startDate,
           endDate,
-          capital: initialCapital,
+          riskAmount: riskAmount,
           maxPositionSize,
           leverage,
           timezone: backtestTimezone,
@@ -679,7 +692,7 @@ export default function App() {
           startYear,
           resolutions: ["5", "15", "30"],
           atrMultipliers: [1, 2, 3, 4, 5],
-          capital: initialCapital,
+          riskAmount: riskAmount,
           maxPositionSize,
           leverage,
         },
@@ -785,7 +798,7 @@ export default function App() {
     view,
     pair,
     selectedStrategyId,
-    initialCapital,
+    riskAmount,
     liveInterval,
   ]);
 
@@ -837,7 +850,7 @@ export default function App() {
           const diff = trade.direction === 'buy' ? (tickerPrice - trade.entryPrice) : (trade.entryPrice - tickerPrice);
           // If units not present, estimate from current capital setting
           const currentLeverage = leverage || 1;
-          const units = trade.units || (initialCapital * currentLeverage / trade.entryPrice);
+          const units = trade.units || 0;
           trade.profit = diff * units;
 
           const margin = (units * trade.entryPrice) / currentLeverage;
@@ -848,7 +861,7 @@ export default function App() {
     });
 
     return combined;
-  }, [backtestResult, tradeHistory, tickerPrice, initialCapital]);
+  }, [backtestResult, tradeHistory, tickerPrice, riskAmount]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30">
@@ -1050,20 +1063,20 @@ export default function App() {
                       </InputGroup>
 
                       <div className="grid grid-cols-2 gap-4">
-                        <InputGroup label="Capital ($)" sub="Total balance">
+                        <InputGroup label="Risk Amount ($)" sub="Risk per trade">
                           <input
                             type="number"
-                            value={initialCapital}
+                            value={riskAmount ?? ''}
                             onChange={(e) =>
-                              setInitialCapital(Number(e.target.value))
+                              setRiskAmount(Number(e.target.value))
                             }
                             className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none"
                           />
                         </InputGroup>
-                        <InputGroup label="Pos Size %" sub="Of capital">
+                        <InputGroup label="Max Pos Size" sub="Notional cap">
                           <input
                             type="number"
-                            value={maxPositionSize}
+                            value={maxPositionSize ?? ''}
                             onChange={(e) =>
                               setMaxPositionSize(Number(e.target.value))
                             }
@@ -1253,20 +1266,20 @@ export default function App() {
                       </InputGroup>
 
                       <div className="grid grid-cols-2 gap-4">
-                        <InputGroup label="Capital ($)" sub="Total balance">
+                        <InputGroup label="Risk Amount ($)" sub="Risk per trade">
                           <input
                             type="number"
-                            value={initialCapital}
+                            value={riskAmount ?? ''}
                             onChange={(e) =>
-                              setInitialCapital(Number(e.target.value))
+                              setRiskAmount(Number(e.target.value))
                             }
                             className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none"
                           />
                         </InputGroup>
-                        <InputGroup label="Pos Size %" sub="Of capital">
+                        <InputGroup label="Max Pos Size" sub="Notional cap">
                           <input
                             type="number"
-                            value={maxPositionSize}
+                            value={maxPositionSize ?? ''}
                             onChange={(e) =>
                               setMaxPositionSize(Number(e.target.value))
                             }
@@ -1410,7 +1423,7 @@ export default function App() {
                       value={`$${backtestResult.summary.finalBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`}
                       icon={Database}
                       color={
-                        backtestResult.summary.finalBalance >= backtestResult.summary.initialCapital
+                        backtestResult.summary.finalBalance >= 10000
                           ? "text-emerald-400"
                           : "text-rose-400"
                       }
@@ -1885,14 +1898,14 @@ export default function App() {
                       </InputGroup>
 
                       <InputGroup
-                        label="Per Trade Capital ($)"
+                        label="Risk Amount ($)"
                         sub="Position size"
                       >
                         <input
                           type="number"
-                          value={initialCapital}
+                          value={riskAmount ?? ''}
                           onChange={(e) =>
-                            setInitialCapital(Number(e.target.value))
+                            setRiskAmount(Number(e.target.value))
                           }
                           className="w-full bg-slate-950 border border-white/10 rounded-2xl px-5 py-4 text-white font-bold outline-none"
                         />
@@ -2164,6 +2177,7 @@ export default function App() {
           <FVGDailyAnalysisView
             currentPair={pair}
             onViewTrade={(t) => setSelectedTradeForView(t)}
+            riskAmount={riskAmount}
           />
         )}
 

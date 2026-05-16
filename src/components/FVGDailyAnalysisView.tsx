@@ -21,9 +21,11 @@ function cn(...classes: (string | boolean | undefined | null)[]) {
 export function FVGDailyAnalysisView({
   currentPair,
   onViewTrade,
+  riskAmount: globalRiskAmount,
 }: {
   currentPair: string;
   onViewTrade: (trade: any) => void;
+  riskAmount: number | null;
 }) {
   const [currentDate, setCurrentDate] = useState<dayjs.Dayjs>(dayjs());
   const [loading, setLoading] = useState(false);
@@ -31,14 +33,31 @@ export function FVGDailyAnalysisView({
   const [selectedTradeForChart, setSelectedTradeForChart] = useState<any>(null);
   const [monthlyStats, setMonthlyStats] = useState<any>(null);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
+  const [hasLiveConfig, setHasLiveConfig] = useState(false);
 
   useEffect(() => {
+    checkLiveConfigs();
+  }, [currentPair]);
+
+  const checkLiveConfigs = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/live-configs`);
+      const exists = data.some((c: any) => c.pair === currentPair && c.strategyId === 'fvg-imbalance' && c.isEnabled);
+      setHasLiveConfig(exists);
+    } catch (err) {
+      console.error("Failed to fetch live configs", err);
+    }
+  };
+
+  useEffect(() => {
+    if (globalRiskAmount === null) return;
     fetchDailyAnalysis(currentDate.format("YYYY-MM-DD"), currentPair);
-  }, [currentDate, currentPair]);
+  }, [currentDate, currentPair, globalRiskAmount]);
 
   useEffect(() => {
+    if (globalRiskAmount === null) return;
     fetchMonthlyStats(currentDate.year(), currentDate.month(), currentPair);
-  }, [currentDate.month(), currentDate.year(), currentPair]);
+  }, [currentDate.month(), currentDate.year(), currentPair, globalRiskAmount]);
   // ***
   const fetchMonthlyStats = async (year: number, month: number, pair: string) => {
     setMonthlyLoading(true);
@@ -49,7 +68,8 @@ export function FVGDailyAnalysisView({
         month,
         pair,
         timezone: "IST",
-        resolution: "1"
+        resolution: "1",
+        riskAmount: globalRiskAmount
       });
       setMonthlyStats(data.summary);
     } catch (err) {
@@ -88,7 +108,12 @@ export function FVGDailyAnalysisView({
               FVG Imbalance Analysis
             </span>
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tighter">FVG Day-by-Day</h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-4xl font-black text-white tracking-tighter">FVG Day-by-Day</h2>
+            <div className="px-3 py-1 rounded-xl bg-slate-900 border border-white/10 flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Risk: ${currentRecord?.riskAmount || globalRiskAmount}</span>
+            </div>
+          </div>
         </div>
 
         {/* Monthly Summary Stats */}
@@ -218,21 +243,23 @@ export function FVGDailyAnalysisView({
                         ${(currentRecord.simulatedTrades?.reduce((a: any, t: any) => a + t.profit, 0) || 0).toFixed(4)}
                       </span>
                     </div>
-                    <div className="pt-4 border-t border-white/5">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-emerald-500">Real Trades</span>
-                        <span className="text-sm font-black text-slate-400">{currentRecord.tradesCount}</span>
+                    {hasLiveConfig && (
+                      <div className="pt-4 border-t border-white/5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-emerald-500">Real Trades</span>
+                          <span className="text-sm font-black text-slate-400">{currentRecord.tradesCount}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-slate-500">Real Net PnL</span>
+                          <span className={cn(
+                            "text-sm font-bold",
+                            currentRecord.dailyPnl >= 0 ? "text-emerald-500/60" : "text-rose-500/60"
+                          )}>
+                            ${currentRecord.dailyPnl.toFixed(4)}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-slate-500">Real Net PnL</span>
-                        <span className={cn(
-                          "text-sm font-bold",
-                          currentRecord.dailyPnl >= 0 ? "text-emerald-500/60" : "text-rose-500/60"
-                        )}>
-                          ${currentRecord.dailyPnl.toFixed(4)}
-                        </span>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -256,7 +283,7 @@ export function FVGDailyAnalysisView({
                 ) : (
                   <div className="space-y-4">
                     {[
-                      ...currentRecord.trades.map((t: any) => ({ ...t, isReal: true })),
+                      ...(hasLiveConfig ? currentRecord.trades.map((t: any) => ({ ...t, isReal: true })) : []),
                       ...(currentRecord.simulatedTrades || []).map((t: any) => ({ ...t, isReal: false }))
                     ].sort((a, b) => dayjs(a.entryTime).valueOf() - dayjs(b.entryTime).valueOf()).map((trade: any, idx: number) => (
                       <div key={idx} className={cn(
@@ -292,6 +319,14 @@ export function FVGDailyAnalysisView({
                           <div>
                             <p className="text-[9px] font-black text-slate-600 uppercase mb-1">Entry</p>
                             <p className="text-sm font-bold text-white font-mono">${trade.entryPrice.toFixed(4)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-600 uppercase mb-1">SL</p>
+                            <p className="text-sm font-bold text-rose-400 font-mono">${trade.sl ? trade.sl.toFixed(4) : '---'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black text-slate-600 uppercase mb-1">TP</p>
+                            <p className="text-sm font-bold text-emerald-400 font-mono">${trade.tp ? trade.tp.toFixed(4) : '---'}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-[9px] font-black text-slate-600 uppercase mb-1">Profit</p>
